@@ -1,0 +1,12 @@
+[package]
+name = "mesh-dht"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mesh-core = { path = "../mesh-core" }
+mesh-transport = { path = "../mesh-transport" }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+rand = { workspace = true }

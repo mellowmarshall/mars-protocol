@@ -1,0 +1,43 @@
+[workspace]
+resolver = "2"
+members = [
+    "mesh-core",
+    "mesh-transport",
+    "mesh-dht",
+    "mesh-node",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/marshallbrett/mesh-protocol"
+
+[workspace.dependencies]
+# Serialization
+ciborium = "0.2"
+ciborium-io = "0.2"
+
+# Hashing
+blake3 = "1"
+
+# Cryptography
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+
+# QUIC
+quinn = "0.11"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Misc
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde = { version = "1", features = ["derive"] }
+hex = "0.4"

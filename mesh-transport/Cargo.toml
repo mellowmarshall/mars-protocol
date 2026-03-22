@@ -1,0 +1,12 @@
+[package]
+name = "mesh-transport"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mesh-core = { path = "../mesh-core" }
+quinn = { workspace = true }
+rustls = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
