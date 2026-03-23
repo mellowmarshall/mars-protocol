@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! `mesh-dht` — Kademlia DHT implementation for the Capability Mesh Protocol.
+//!
+//! Implements Section 4 of the wire specification: XOR distance metrics,
+//! k-bucket routing table, descriptor storage, and protocol message handling.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod distance;
+pub mod node;
+pub mod routing;
+pub mod storage;
+pub mod transport;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use node::DhtNode;
+pub use routing::RoutingTable;
+pub use storage::DescriptorStore;

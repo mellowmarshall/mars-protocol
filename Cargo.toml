@@ -35,6 +35,9 @@ tokio = { version = "1", features = ["full"] }
 # CLI
 clap = { version = "4", features = ["derive"] }
 
+# Certs
+rcgen = "0.13"
+
 # Misc
 thiserror = "2"
 tracing = "0.1"
