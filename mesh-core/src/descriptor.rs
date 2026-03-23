@@ -59,24 +59,17 @@ pub struct Descriptor {
     pub signature: Vec<u8>,
 }
 
-/// The fields that are included in the content hash computation.
-/// Serialized as canonical CBOR with deterministic map key ordering.
-#[derive(Serialize)]
-struct DescriptorHashInput<'a> {
-    payload: &'a [u8],
-    publisher: &'a Identity,
-    routing_keys: &'a [Hash],
-    schema_hash: &'a Hash,
-    sequence: u64,
-    timestamp: u64,
-    topic: &'a str,
-    ttl: u32,
-}
+// DescriptorHashInput removed: canonical CBOR is now built explicitly
+// via compute_id() using BTreeMap<String, ciborium::Value> to guarantee
+// interoperable, byte-identical serialization across implementations.
 
 impl Descriptor {
     /// Compute the content hash for a descriptor's fields (Section 2.1).
     ///
-    /// Serializes the hashable fields as canonical CBOR, then computes BLAKE3.
+    /// Builds an explicit CBOR map with lexicographically sorted string keys
+    /// and precisely typed values, then hashes with BLAKE3. This canonical
+    /// form is used ONLY for content-hashing — NOT for network serialization.
+    /// See PROTOCOL.md Appendix C for the specification and test vectors.
     #[allow(clippy::too_many_arguments)]
     pub fn compute_id(
         schema_hash: &Hash,
@@ -88,20 +81,83 @@ impl Descriptor {
         ttl: u32,
         routing_keys: &[Hash],
     ) -> Result<Hash> {
-        // Fields in alphabetical key order for deterministic CBOR map
-        let input = DescriptorHashInput {
+        let buf = Self::canonical_cbor_bytes(
+            schema_hash,
+            topic,
             payload,
             publisher,
-            routing_keys,
-            schema_hash,
-            sequence,
             timestamp,
-            topic,
+            sequence,
             ttl,
-        };
-        let mut buf = Vec::new();
-        ciborium::into_writer(&input, &mut buf).map_err(|e| MeshError::Cbor(e.to_string()))?;
+            routing_keys,
+        );
         Ok(Hash::blake3(&buf))
+    }
+
+    /// Produce the canonical CBOR bytes for content-hashing.
+    ///
+    /// The output is a CBOR map (major type 5) with string keys in
+    /// lexicographic order. Each value uses the exact CBOR type specified
+    /// in the protocol (see Appendix C).
+    #[allow(clippy::too_many_arguments)]
+    fn canonical_cbor_bytes(
+        schema_hash: &Hash,
+        topic: &str,
+        payload: &[u8],
+        publisher: &Identity,
+        timestamp: u64,
+        sequence: u64,
+        ttl: u32,
+        routing_keys: &[Hash],
+    ) -> Vec<u8> {
+        use ciborium::Value;
+        use std::collections::BTreeMap;
+
+        let mut map = BTreeMap::new();
+        map.insert("payload", Value::Bytes(payload.to_vec()));
+        map.insert(
+            "publisher",
+            Value::Array(vec![
+                Value::Integer(publisher.algorithm.into()),
+                Value::Bytes(publisher.public_key.clone()),
+            ]),
+        );
+        map.insert(
+            "routing_keys",
+            Value::Array(
+                routing_keys
+                    .iter()
+                    .map(|h| {
+                        Value::Array(vec![
+                            Value::Integer(h.algorithm.into()),
+                            Value::Bytes(h.digest.clone()),
+                        ])
+                    })
+                    .collect(),
+            ),
+        );
+        map.insert(
+            "schema_hash",
+            Value::Array(vec![
+                Value::Integer(schema_hash.algorithm.into()),
+                Value::Bytes(schema_hash.digest.clone()),
+            ]),
+        );
+        map.insert("sequence", Value::Integer(sequence.into()));
+        map.insert("timestamp", Value::Integer(timestamp.into()));
+        map.insert("topic", Value::Text(topic.to_string()));
+        map.insert("ttl", Value::Integer(ttl.into()));
+
+        let cbor_value = Value::Map(
+            map.into_iter()
+                .map(|(k, v)| (Value::Text(k.into()), v))
+                .collect(),
+        );
+
+        let mut buf = Vec::new();
+        ciborium::into_writer(&cbor_value, &mut buf)
+            .expect("CBOR serialization cannot fail for well-formed values");
+        buf
     }
 
     /// Create a new descriptor, computing its id and signing it.
@@ -655,5 +711,128 @@ mod tests {
         )
         .unwrap();
         assert!(desc.validate(now).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod test_vectors {
+    use super::*;
+    use crate::hash::Hash;
+    use crate::identity::Keypair;
+
+    /// Reference test vector for canonical CBOR serialization (Appendix C).
+    ///
+    /// Uses a fixed keypair and deterministic inputs so other implementations
+    /// can reproduce the exact same canonical CBOR bytes and BLAKE3 hash.
+    #[test]
+    fn canonical_cbor_test_vector() {
+        // Fixed secret key (32 bytes of 0x01)
+        let secret = [0x01u8; 32];
+        let kp = Keypair::from_bytes(&secret);
+        let publisher = kp.identity();
+
+        let schema_hash = Hash::blake3(b"mesh:schema:core/capability");
+        let routing_key = Hash::blake3(b"mesh:routing:compute/inference/text-generation");
+
+        let payload = b"test payload".to_vec();
+        let topic = "test-topic".to_string();
+        let timestamp: u64 = 1_700_000_000_000_000; // fixed
+        let sequence: u64 = 1;
+        let ttl: u32 = 3600;
+        let routing_keys = vec![routing_key];
+
+        // Print inputs for cross-implementation reference
+        println!("=== Test Vector Inputs ===");
+        println!("secret_key: {}", hex::encode(secret));
+        println!("publisher.algorithm: 0x{:02x}", publisher.algorithm);
+        println!(
+            "publisher.public_key: {}",
+            hex::encode(&publisher.public_key)
+        );
+        println!("schema_hash.algorithm: 0x{:02x}", schema_hash.algorithm);
+        println!("schema_hash.digest: {}", hex::encode(&schema_hash.digest));
+        println!("topic: {}", topic);
+        println!("payload: {}", hex::encode(&payload));
+        println!("timestamp: {}", timestamp);
+        println!("sequence: {}", sequence);
+        println!("ttl: {}", ttl);
+        println!(
+            "routing_keys[0].algorithm: 0x{:02x}",
+            routing_keys[0].algorithm
+        );
+        println!(
+            "routing_keys[0].digest: {}",
+            hex::encode(&routing_keys[0].digest)
+        );
+
+        // Compute canonical CBOR
+        let cbor_bytes = Descriptor::canonical_cbor_bytes(
+            &schema_hash,
+            &topic,
+            &payload,
+            &publisher,
+            timestamp,
+            sequence,
+            ttl,
+            &routing_keys,
+        );
+        let cbor_hex = hex::encode(&cbor_bytes);
+        println!("\n=== Canonical CBOR ===");
+        println!("cbor_hex: {}", cbor_hex);
+        println!("cbor_len: {}", cbor_bytes.len());
+
+        // Compute BLAKE3 hash (the descriptor ID)
+        let id = Hash::blake3(&cbor_bytes);
+        let id_hex = hex::encode(&id.digest);
+        println!("\n=== Descriptor ID ===");
+        println!("blake3_hex: {}", id_hex);
+
+        // Also verify via compute_id path
+        let id_via_compute = Descriptor::compute_id(
+            &schema_hash,
+            &topic,
+            &payload,
+            &publisher,
+            timestamp,
+            sequence,
+            ttl,
+            &routing_keys,
+        )
+        .unwrap();
+        assert_eq!(
+            id, id_via_compute,
+            "canonical_cbor_bytes and compute_id must agree"
+        );
+
+        // Now assert the exact values (these become the spec's test vectors).
+        // If you change the canonical serialization, these MUST be updated and
+        // the PROTOCOL.md appendix MUST be updated to match.
+        assert_eq!(
+            cbor_hex,
+            "a8677061796c6f61644c74657374207061796c6f6164697075626c6973686572820158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c6c726f7574696e675f6b6579738182035820eea1159ae33052b4a1c6e6cd41b1c923642fd9879aebb2b875458d785b9ae4f56b736368656d615f6861736882035820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3306873657175656e6365016974696d657374616d701b00060a24181e400065746f7069636a746573742d746f7069636374746c190e10",
+            "CBOR hex mismatch — canonical serialization has changed!"
+        );
+        assert_eq!(
+            id_hex, "321631d68f034cbdb122eaaaefe9216370f28020900239dfcdbefa66c14df507",
+            "BLAKE3 descriptor ID mismatch — canonical serialization has changed!"
+        );
+
+        // Verify full round-trip: create descriptor and validate
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash,
+            topic,
+            payload,
+            timestamp,
+            sequence,
+            ttl,
+            routing_keys,
+        )
+        .unwrap();
+        assert_eq!(desc.id, id_via_compute);
+        // Validate at the descriptor's own timestamp (it's in the past but TTL
+        // check uses effective_start = min(timestamp, now), so use timestamp + 1s)
+        let validate_time = timestamp + 1_000_000;
+        assert!(desc.validate(validate_time).is_ok());
     }
 }

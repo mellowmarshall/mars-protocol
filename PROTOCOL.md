@@ -1195,6 +1195,83 @@ Computed as `BLAKE3("mesh:schema:<name>")`:
 | core/revocation | `mesh:schema:core/revocation` | *(compute at implementation time)* |
 | core/key-rotation | `mesh:schema:core/key-rotation` | *(compute at implementation time)* |
 
+## Appendix C: Canonical Serialization & Test Vectors
+
+### C.1 Canonical Hash Input Format
+
+The canonical hash input for computing a descriptor's content ID is a **CBOR map
+(major type 5)** with string keys sorted in lexicographic (byte) order. Each key
+is a CBOR text string (major type 3). Values use the exact CBOR types specified
+below.
+
+This canonical form is used **only** for computing the descriptor ID hash. It is
+**not** the wire format for network serialization (which may use any valid CBOR
+encoding, including arrays or different key orderings).
+
+### C.2 Field Types
+
+| Key (text string) | CBOR Type | Description |
+|---|---|---|
+| `payload` | byte string (major type 2) | Raw payload bytes |
+| `publisher` | array: [unsigned integer (algo), byte string (pubkey)] | Publisher identity |
+| `routing_keys` | array of arrays: [[unsigned integer (algo), byte string (digest)], ...] | DHT routing keys |
+| `schema_hash` | array: [unsigned integer (algo), byte string (digest)] | Schema content hash |
+| `sequence` | unsigned integer (major type 0) | Monotonic sequence number |
+| `timestamp` | unsigned integer (major type 0) | Microseconds since Unix epoch |
+| `topic` | text string (major type 3) | Publisher-chosen topic |
+| `ttl` | unsigned integer (major type 0) | Time-to-live in seconds |
+
+Keys MUST appear in the map in the order shown above (which is lexicographic).
+
+### C.3 Test Vector
+
+**Inputs:**
+
+| Field | Value |
+|---|---|
+| Secret key (Ed25519) | `0101010101010101010101010101010101010101010101010101010101010101` |
+| publisher.algorithm | `0x01` (Ed25519) |
+| publisher.public_key | `8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c` |
+| schema_hash.algorithm | `0x03` (BLAKE3) |
+| schema_hash.digest | `bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb330` |
+| topic | `test-topic` |
+| payload | `74657374207061796c6f6164` (ASCII: "test payload") |
+| timestamp | `1700000000000000` (microseconds) |
+| sequence | `1` |
+| ttl | `3600` |
+| routing_keys[0].algorithm | `0x03` (BLAKE3) |
+| routing_keys[0].digest | `eea1159ae33052b4a1c6e6cd41b1c923642fd9879aebb2b875458d785b9ae4f5` |
+
+**Schema hash** is computed as `BLAKE3("mesh:schema:core/capability")`.
+**Routing key** is computed as `BLAKE3("mesh:routing:compute/inference/text-generation")`.
+
+**Canonical CBOR (hex, 219 bytes):**
+
+```
+a8677061796c6f61644c74657374207061796c6f6164697075626c697368657282
+0158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f
+6f5c6c726f7574696e675f6b6579738182035820eea1159ae33052b4a1c6e6cd41
+b1c923642fd9879aebb2b875458d785b9ae4f56b736368656d615f686173688203
+5820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3
+306873657175656e6365016974696d657374616d701b00060a24181e400065746f
+7069636a746573742d746f7069636374746c190e10
+```
+
+**BLAKE3 descriptor ID (hex):**
+
+```
+321631d68f034cbdb122eaaaefe9216370f28020900239dfcdbefa66c14df507
+```
+
+### C.4 Conformance
+
+Implementations **MUST** produce byte-identical canonical CBOR for the same input
+fields. The test vector in this appendix is the conformance test.
+
+If your implementation produces the BLAKE3 hash
+`321631d68f034cbdb122eaaaefe9216370f28020900239dfcdbefa66c14df507` for the
+test vector inputs above, your canonical serialization is correct.
+
 ---
 
 *This document is the protocol. The protocol is this document.*
