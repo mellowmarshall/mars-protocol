@@ -23,6 +23,8 @@ pub struct HubConfig {
     pub peering: PeeringConfig,
     #[serde(default)]
     pub mu_costs: MuCosts,
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
     /// Operator bearer token for admin API authentication.
     pub operator_token: Option<String>,
     /// Rate limiting configuration (not TOML-deserializable, uses defaults).
@@ -190,6 +192,10 @@ pub struct SecurityConfig {
     pub max_queries_per_identity_per_sec: u32,
     #[serde(default)]
     pub admin_bearer_token: Option<String>,
+    /// Addresses allowed for outbound connections even if private/loopback.
+    /// Useful for testing or private mesh deployments.
+    #[serde(default)]
+    pub outbound_allowlist: Vec<String>,
 }
 
 impl Default for SecurityConfig {
@@ -198,6 +204,7 @@ impl Default for SecurityConfig {
             max_connections_per_ip: 50,
             max_queries_per_identity_per_sec: 20,
             admin_bearer_token: None,
+            outbound_allowlist: Vec::new(),
         }
     }
 }
@@ -234,6 +241,22 @@ impl Default for MuCosts {
             store_update: 5,
             find_value: 1,
             find_node: 1,
+        }
+    }
+}
+
+/// Observability configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ObservabilityConfig {
+    /// Enable Prometheus metrics endpoint (default: true).
+    #[serde(default = "default_true")]
+    pub metrics_enabled: bool,
+}
+
+impl Default for ObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            metrics_enabled: true,
         }
     }
 }

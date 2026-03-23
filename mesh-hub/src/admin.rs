@@ -13,6 +13,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::HubDhtNode;
+use crate::metrics::HubMetrics;
 use crate::tenant::TenantManager;
 
 /// Shared state for admin API handlers.
@@ -24,6 +25,8 @@ pub struct AdminState {
     pub hub_did: Option<String>,
     /// Operator bearer token for admin API authentication.
     pub operator_token: Option<String>,
+    /// Hub metrics handle for the /metrics endpoint.
+    pub metrics: Option<HubMetrics>,
 }
 
 /// Build the composable admin API router.
@@ -61,7 +64,8 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
             delete(remove_identity),
         )
         .route("/api/v1/tenants/:id/usage", get(get_tenant_usage))
-        .route("/api/v1/tenants/:id/quota", patch(update_tenant_quota));
+        .route("/api/v1/tenants/:id/quota", patch(update_tenant_quota))
+        .route("/metrics", get(prometheus_metrics));
 
     public.merge(operator).with_state(state)
 }
@@ -120,6 +124,34 @@ async fn hub_status(State(state): State<Arc<AdminState>>) -> impl IntoResponse {
         "routing_key_count": routing_key_count,
         "tenant_count": tenant_count,
     }))
+}
+
+// ── Prometheus metrics (operator-only) ──
+
+async fn prometheus_metrics(
+    State(state): State<Arc<AdminState>>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    if let Err(status) = check_operator_token(&state, &headers) {
+        return status.into_response();
+    }
+    let Some(ref metrics) = state.metrics else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "metrics not enabled",
+        )
+            .into_response();
+    };
+    let body = metrics.render();
+    (
+        StatusCode::OK,
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
+        body,
+    )
+        .into_response()
 }
 
 // ── Tenant management ──

@@ -4,7 +4,6 @@
 //! wire protocol messages (PING, PONG, STORE, FIND_VALUE) that regular nodes use.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -22,6 +21,7 @@ use mesh_transport::send_request;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use crate::network::validate_outbound_addr;
 use crate::HubDhtNode;
 
 /// Maximum descriptors per gossip round per peer.
@@ -85,6 +85,8 @@ pub struct PeerManager {
     hub_metadata: HubMetadata,
     /// Maximum number of connected peers.
     max_peers: usize,
+    /// Addresses allowed for outbound connections even if private/loopback (SSRF allowlist).
+    outbound_allowlist: Vec<String>,
 }
 
 impl PeerManager {
@@ -96,6 +98,7 @@ impl PeerManager {
         endpoint: MeshEndpoint,
         hub_metadata: HubMetadata,
         max_peers: usize,
+        outbound_allowlist: Vec<String>,
     ) -> Self {
         Self {
             hub_identity,
@@ -105,6 +108,7 @@ impl PeerManager {
             endpoint,
             hub_metadata,
             max_peers,
+            outbound_allowlist,
         }
     }
 
@@ -202,10 +206,12 @@ impl PeerManager {
             return Ok(());
         }
 
-        let socket_addr: SocketAddr = addr
-            .address
-            .parse()
-            .map_err(|e| format!("invalid peer address '{}': {}", addr.address, e))?;
+        // SSRF prevention: validate that the outbound address is not private/loopback/reserved
+        let socket_addr = validate_outbound_addr(&addr.address, &self.outbound_allowlist)
+            .map_err(|e| {
+                tracing::warn!(%did, addr = %addr.address, error = %e, "outbound address rejected by SSRF filter");
+                format!("outbound address rejected: {}", e)
+            })?;
 
         match self.endpoint.connect(socket_addr).await {
             Ok(connection) => {
@@ -556,7 +562,7 @@ mod tests {
             endpoint: "quic://127.0.0.1:4433".into(),
         };
 
-        PeerManager::new(identity, keypair, addr, endpoint, metadata, 50)
+        PeerManager::new(identity, keypair, addr, endpoint, metadata, 50, Vec::new())
     }
 
     #[tokio::test]

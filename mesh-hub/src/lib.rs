@@ -9,6 +9,8 @@ pub mod admin;
 pub mod auth;
 pub mod config;
 pub mod hooks;
+pub mod metrics;
+pub mod network;
 pub mod peering;
 pub mod policy;
 pub mod rate_limit;
@@ -32,6 +34,7 @@ use mesh_transport::endpoint::MeshEndpoint;
 use crate::admin::{AdminState, admin_router};
 use crate::config::HubConfig;
 use crate::hooks::HubProtocolHook;
+use crate::metrics::HubMetrics;
 use crate::peering::{HubMetadata, PeerManager};
 use crate::policy::PolicyEngine;
 use crate::rate_limit::HubRateLimiter;
@@ -53,6 +56,8 @@ pub struct HubRuntime {
     peer_manager: Option<Arc<tokio::sync::Mutex<PeerManager>>>,
     /// Rate limiter for per-IP and per-identity throttling.
     rate_limiter: Arc<HubRateLimiter>,
+    /// Hub metrics (None if observability is disabled).
+    metrics: Option<HubMetrics>,
 }
 
 impl HubRuntime {
@@ -69,6 +74,7 @@ impl HubRuntime {
             start_time: std::time::Instant::now(),
             hub_did: Some(self.hub_identity.did()),
             operator_token: self.config.operator_token.clone(),
+            metrics: self.metrics.clone(),
         });
         admin_router(state)
     }
@@ -82,6 +88,7 @@ impl HubRuntime {
             start_time: std::time::Instant::now(),
             hub_did: Some(self.hub_identity.did()),
             operator_token: self.config.operator_token.clone(),
+            metrics: self.metrics.clone(),
         });
         let router = admin_router(admin_state);
 
@@ -178,10 +185,13 @@ impl HubRuntime {
 
         // Protocol listener
         let dht_node = self.dht_node.clone();
+        let hub_metrics = self.metrics.clone();
         let listen_future = self.endpoint.listen(move |frame, sender, peer_identity| {
             let dht_node = dht_node.clone();
+            let hub_metrics = hub_metrics.clone();
             async move {
-                handle_protocol_request(frame, sender, peer_identity, dht_node).await;
+                handle_protocol_request(frame, sender, peer_identity, dht_node, hub_metrics)
+                    .await;
             }
         });
 
@@ -237,9 +247,20 @@ impl HubBuilder {
         // Rate limiter
         let rate_limiter = Arc::new(HubRateLimiter::new(self.config.rate_limit.clone()));
 
+        // Observability: initialize metrics if enabled
+        let hub_metrics = if self.config.observability.metrics_enabled {
+            Some(HubMetrics::new())
+        } else {
+            None
+        };
+
         // Policy engine + protocol hook
         let policy = PolicyEngine::new(self.config.policy.clone());
-        let hook = Arc::new(HubProtocolHook::new(policy, tenant_manager.clone(), rate_limiter.clone()));
+        let mut hook = HubProtocolHook::new(policy, tenant_manager.clone(), rate_limiter.clone());
+        if let Some(ref m) = hub_metrics {
+            hook = hook.with_metrics(m.clone());
+        }
+        let hook = Arc::new(hook);
 
         // QUIC endpoint (before moving keypair)
         let listen_addr = self.config.network.listen_addr;
@@ -269,6 +290,7 @@ impl HubBuilder {
                 peering_endpoint,
                 hub_metadata,
                 self.config.peering.max_peers,
+                self.config.security.outbound_allowlist.clone(),
             ))))
         } else {
             None
@@ -287,6 +309,7 @@ impl HubBuilder {
             tenant_manager,
             peer_manager,
             rate_limiter,
+            metrics: hub_metrics,
         })
     }
 }
@@ -296,11 +319,16 @@ async fn handle_protocol_request(
     sender: ResponseSender,
     peer_identity: Option<Identity>,
     dht_node: Arc<Mutex<HubDhtNode>>,
+    hub_metrics: Option<HubMetrics>,
 ) {
+    let start = std::time::Instant::now();
+    let msg_type = frame.msg_type;
+    let msg_id = frame.msg_id;
+
     let response = {
         let mut node = dht_node.lock().unwrap();
 
-        match frame.msg_type {
+        match msg_type {
             MSG_PING => {
                 let Ok(ping) = from_cbor::<Ping>(&frame.body) else {
                     return;
@@ -350,11 +378,23 @@ async fn handle_protocol_request(
                 Frame::response(&frame, MSG_FIND_VALUE_RESULT, body)
             }
             _ => {
-                tracing::debug!(msg_type = frame.msg_type, "unknown message type");
+                tracing::debug!(msg_type, "unknown message type");
                 return;
             }
         }
     };
+
+    // Record latency metrics (aggregate, no per-tenant labels).
+    let elapsed = start.elapsed().as_secs_f64();
+    if let Some(ref m) = hub_metrics {
+        match msg_type {
+            MSG_STORE => m.record_store(elapsed),
+            MSG_FIND_VALUE => m.record_query(elapsed),
+            _ => {}
+        }
+    }
+
+    tracing::trace!(msg_type, msg_id = %hex::encode(msg_id), elapsed_ms = elapsed * 1000.0, "request handled");
 
     if let Err(e) = sender.send(&response).await {
         tracing::debug!("failed to send response: {e}");

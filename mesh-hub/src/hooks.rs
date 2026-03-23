@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use mesh_core::{Descriptor, Hash};
 use mesh_dht::ProtocolHook;
 
+use crate::metrics::HubMetrics;
 use crate::policy::PolicyEngine;
 use crate::rate_limit::{HubRateLimiter, Operation};
 use crate::storage::redb::identity_bytes;
@@ -15,6 +16,7 @@ pub struct HubProtocolHook {
     policy: PolicyEngine,
     tenant_manager: Arc<Mutex<TenantManager>>,
     rate_limiter: Arc<HubRateLimiter>,
+    metrics: Option<HubMetrics>,
 }
 
 impl HubProtocolHook {
@@ -27,7 +29,14 @@ impl HubProtocolHook {
             policy,
             tenant_manager,
             rate_limiter,
+            metrics: None,
         }
+    }
+
+    /// Attach metrics to this hook so it can record rate-limit events.
+    pub fn with_metrics(mut self, metrics: HubMetrics) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 }
 
@@ -40,6 +49,9 @@ impl ProtocolHook for HubProtocolHook {
             .check_identity(&descriptor.publisher, Operation::Store)
         {
             tracing::warn!(publisher = %descriptor.publisher.did(), %e, "store rate limited");
+            if let Some(ref m) = self.metrics {
+                m.record_rate_limited("store");
+            }
             return Err("rate limited".into());
         }
 
