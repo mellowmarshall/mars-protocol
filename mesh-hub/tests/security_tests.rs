@@ -1,25 +1,18 @@
 //! Phase 4 hardening: security verification tests.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+mod common;
 
-use mesh_core::hash::schema_hash;
 use mesh_core::identity::Keypair;
 use mesh_core::message::{NodeAddr, NodeInfo};
 use mesh_core::routing::routing_key;
-use mesh_core::schema::SCHEMA_HASH_CORE_REVOCATION;
-use mesh_core::{Descriptor, Hash};
+use mesh_core::schema::{SCHEMA_HASH_CORE_CAPABILITY, SCHEMA_HASH_CORE_REVOCATION};
+use mesh_core::Hash;
 use mesh_dht::routing::{AddNodeResult, K, RoutingTable};
 use mesh_dht::storage::DescriptorStore;
 use mesh_dht::verify_sender_binding;
 use mesh_hub::network::validate_outbound_addr;
-use mesh_hub::tenant::TenantManager;
 
-fn now_micros() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_micros() as u64
-}
+use common::{make_descriptor, now_micros, open_temp_tenant_manager};
 
 // ── Test 1: Sender binding verification ──
 
@@ -118,40 +111,36 @@ fn test_revocation_enforcement() {
     let rk = routing_key("compute/revocation-test");
     let now = now_micros();
 
-    // Store a normal descriptor
-    let desc = Descriptor::create(
+    let desc = make_descriptor(
         &kp,
-        schema_hash("core/capability"),
-        "topic".into(),
-        b"payload".to_vec(),
+        SCHEMA_HASH_CORE_CAPABILITY.clone(),
+        "topic",
+        b"payload",
         now,
         1,
         3600,
         vec![rk.clone()],
-    )
-    .unwrap();
+    );
     let target_id = desc.id.clone();
     store.store_descriptor_at(desc, now).unwrap();
 
-    // Verify it's retrievable
     assert_eq!(store.get_descriptors_at(&rk, None, now).len(), 1);
 
-    // Store a revocation descriptor for it (same publisher)
+    // Store a revocation descriptor (same publisher)
     let revocation_payload = make_revocation_payload(&target_id);
-    let revocation = Descriptor::create(
+    let revocation = make_descriptor(
         &kp,
         SCHEMA_HASH_CORE_REVOCATION.clone(),
-        "revoke-topic".into(),
-        revocation_payload,
+        "revoke-topic",
+        &revocation_payload,
         now,
         2,
         3600,
         vec![rk.clone()],
-    )
-    .unwrap();
+    );
     store.store_descriptor_at(revocation, now).unwrap();
 
-    // The original descriptor should no longer be returned in queries
+    // The original descriptor should no longer be returned
     let results = store.get_descriptors_at(&rk, None, now);
     for desc in &results {
         assert_ne!(
@@ -174,6 +163,8 @@ fn make_node_info_with_time(kp: &Keypair, last_seen: u64) -> NodeInfo {
     }
 }
 
+const KEYGEN_SAFETY_CAP: usize = 100_000;
+
 #[test]
 fn test_routing_table_sybil_resistance() {
     use mesh_dht::distance::{bucket_index, xor_distance};
@@ -182,16 +173,15 @@ fn test_routing_table_sybil_resistance() {
     let local_id = local.identity().node_id();
     let mut table = RoutingTable::new(local_id.clone());
 
-    // Generate K+1 nodes that land in the same bucket
+    // Generate K+1 nodes that land in the same bucket (capped to prevent CI hangs)
     let mut nodes_for_bucket: Vec<Keypair> = Vec::new();
     let mut target_bucket = None;
 
-    loop {
+    for _ in 0..KEYGEN_SAFETY_CAP {
         let kp = Keypair::generate();
         let node_id = kp.identity().node_id();
         let dist = xor_distance(&local_id, &node_id);
         if let Some(idx) = bucket_index(&dist) {
-            // Pick the first bucket that gets enough nodes
             if target_bucket.is_none() || target_bucket == Some(idx) {
                 target_bucket = Some(idx);
                 nodes_for_bucket.push(kp);
@@ -201,6 +191,10 @@ fn test_routing_table_sybil_resistance() {
             }
         }
     }
+    assert!(
+        nodes_for_bucket.len() > K,
+        "failed to generate K+1 nodes in same bucket within {KEYGEN_SAFETY_CAP} attempts"
+    );
 
     let bucket_idx = target_bucket.unwrap();
 
@@ -219,7 +213,6 @@ fn test_routing_table_sybil_resistance() {
     let result = table.add_node(make_node_info_with_time(overflow_kp, K as u64));
     let (lrs_id, candidate_info) = match result {
         AddNodeResult::BucketFull { lrs, candidate } => {
-            // LRS should be the first node (added with time 0)
             assert_eq!(lrs.identity, nodes_for_bucket[0].identity());
             assert_eq!(candidate.identity, overflow_kp.identity());
             (lrs.identity.node_id(), candidate)
@@ -227,7 +220,6 @@ fn test_routing_table_sybil_resistance() {
         _ => panic!("expected BucketFull, got {:?}", result),
     };
 
-    // Table should still have K entries (no eviction yet)
     assert_eq!(table.bucket(bucket_idx).entries.len(), K);
 
     // Resolve as LRS responded — candidate discarded
@@ -237,7 +229,6 @@ fn test_routing_table_sybil_resistance() {
         K,
         "bucket should still have K entries after LRS responded"
     );
-    // The overflow node should NOT be in the bucket
     assert!(
         !table
             .bucket(bucket_idx)
@@ -247,14 +238,21 @@ fn test_routing_table_sybil_resistance() {
         "overflow node should not be admitted when LRS responded"
     );
 
-    // Now trigger BucketFull again with a new candidate
-    let new_kp = loop {
-        let kp = Keypair::generate();
-        let node_id = kp.identity().node_id();
-        let dist = xor_distance(&local_id, &node_id);
-        if bucket_index(&dist) == Some(bucket_idx) {
-            break kp;
+    // Trigger BucketFull again with a new candidate
+    let new_kp = {
+        let mut found = None;
+        for _ in 0..KEYGEN_SAFETY_CAP {
+            let kp = Keypair::generate();
+            let node_id = kp.identity().node_id();
+            let dist = xor_distance(&local_id, &node_id);
+            if bucket_index(&dist) == Some(bucket_idx) {
+                found = Some(kp);
+                break;
+            }
         }
+        found.unwrap_or_else(|| {
+            panic!("failed to generate node for bucket {bucket_idx} within {KEYGEN_SAFETY_CAP} attempts")
+        })
     };
     let result = table.add_node(make_node_info_with_time(&new_kp, (K + 1) as u64));
     let (lrs_id2, candidate_info2) = match result {
@@ -269,7 +267,6 @@ fn test_routing_table_sybil_resistance() {
         K,
         "bucket should still have K entries after eviction"
     );
-    // The new candidate should now be in the bucket
     assert!(
         table
             .bucket(bucket_idx)
@@ -285,7 +282,7 @@ fn test_routing_table_sybil_resistance() {
 #[test]
 fn test_did_auth_challenge_lifecycle() {
     let dir = tempfile::tempdir().unwrap();
-    let tm = TenantManager::open(&dir.path().join("tenants.db")).unwrap();
+    let tm = open_temp_tenant_manager(dir.path());
     let kp = Keypair::generate();
     let identity = kp.identity();
 
@@ -296,7 +293,6 @@ fn test_did_auth_challenge_lifecycle() {
         .create_challenge(&tenant.id, &identity.did(), "register_identity")
         .unwrap();
 
-    // Verify it's not expired
     assert!(
         !challenge.is_expired(challenge.issued_at),
         "challenge should not be expired at issued time"
@@ -328,13 +324,13 @@ fn test_did_auth_challenge_lifecycle() {
         "first consume should succeed"
     );
 
-    // Try to reuse (consume again) → fails
+    // Replay → fails
     assert!(
         tm.consume_challenge(&challenge.id).is_err(),
         "second consume should fail (already consumed)"
     );
 
-    // Try expired challenge: create a new one, then check expiry
+    // Expiry check
     let challenge2 = tm
         .create_challenge(&tenant.id, &identity.did(), "register_identity")
         .unwrap();
