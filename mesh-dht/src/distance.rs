@@ -14,8 +14,8 @@ pub fn xor_distance(a: &Hash, b: &Hash) -> [u8; 32] {
     debug_assert_eq!(a.digest.len(), 32, "hash a must be 32 bytes");
     debug_assert_eq!(b.digest.len(), 32, "hash b must be 32 bytes");
     let mut result = [0u8; 32];
-    for i in 0..32 {
-        result[i] = a.digest[i] ^ b.digest[i];
+    for (i, byte) in result.iter_mut().enumerate() {
+        *byte = a.digest[i] ^ b.digest[i];
     }
     result
 }
@@ -186,7 +186,9 @@ mod tests {
         // If A is closer to T than B, and B is closer to T than C,
         // then A is closer to T than C (transitivity).
         let target = Hash::blake3(b"target");
-        let nodes: Vec<Hash> = (0..10).map(|i| Hash::blake3(format!("node{i}").as_bytes())).collect();
+        let nodes: Vec<Hash> = (0..10)
+            .map(|i| Hash::blake3(format!("node{i}").as_bytes()))
+            .collect();
         let mut sorted = nodes.clone();
         sorted.sort_by(|a, b| distance_cmp(&target, a, b));
         // Verify sorted order is consistent

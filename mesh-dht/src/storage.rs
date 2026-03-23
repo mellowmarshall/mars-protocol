@@ -131,13 +131,13 @@ impl DescriptorStore {
 
         // Sequence check (Section 2.2 step 8) — dedup key
         let dedup_key = DedupKey::from_descriptor(&descriptor);
-        if let Some(&current_seq) = self.sequences.get(&dedup_key) {
-            if descriptor.sequence < current_seq {
-                return Err(StoreError::StaleDescriptor {
-                    received: descriptor.sequence,
-                    current: current_seq,
-                });
-            }
+        if let Some(&current_seq) = self.sequences.get(&dedup_key)
+            && descriptor.sequence < current_seq
+        {
+            return Err(StoreError::StaleDescriptor {
+                received: descriptor.sequence,
+                current: current_seq,
+            });
         }
 
         // Update sequence tracker
@@ -176,20 +176,20 @@ impl DescriptorStore {
             Some(f) => descriptors
                 .iter()
                 .filter(|d| {
-                    if let Some(ref sh) = f.schema_hash {
-                        if &d.schema_hash != sh {
-                            return false;
-                        }
+                    if let Some(ref sh) = f.schema_hash
+                        && &d.schema_hash != sh
+                    {
+                        return false;
                     }
-                    if let Some(min_ts) = f.min_timestamp {
-                        if d.timestamp < min_ts {
-                            return false;
-                        }
+                    if let Some(min_ts) = f.min_timestamp
+                        && d.timestamp < min_ts
+                    {
+                        return false;
                     }
-                    if let Some(ref pub_id) = f.publisher {
-                        if &d.publisher != pub_id {
-                            return false;
-                        }
+                    if let Some(ref pub_id) = f.publisher
+                        && &d.publisher != pub_id
+                    {
+                        return false;
                     }
                     true
                 })
@@ -219,9 +219,7 @@ impl DescriptorStore {
 
     /// Check if we have any descriptors at a routing key.
     pub fn has_descriptors(&self, routing_key: &Hash) -> bool {
-        self.store
-            .get(routing_key)
-            .is_some_and(|v| !v.is_empty())
+        self.store.get(routing_key).is_some_and(|v| !v.is_empty())
     }
 
     /// Total number of descriptors stored (across all routing keys, may double-count).
@@ -377,8 +375,12 @@ mod tests {
         let kp2 = Keypair::generate();
         let rk = routing_key("compute/inference/text-generation");
 
-        store.store_descriptor(make_descriptor(&kp1, "topic", 1, 3600)).unwrap();
-        store.store_descriptor(make_descriptor(&kp2, "topic", 1, 3600)).unwrap();
+        store
+            .store_descriptor(make_descriptor(&kp1, "topic", 1, 3600))
+            .unwrap();
+        store
+            .store_descriptor(make_descriptor(&kp2, "topic", 1, 3600))
+            .unwrap();
 
         let results = store.get_descriptors(&rk, None);
         assert_eq!(results.len(), 2);
@@ -390,7 +392,9 @@ mod tests {
         let kp = Keypair::generate();
         let rk = routing_key("compute/inference/text-generation");
 
-        store.store_descriptor(make_descriptor(&kp, "topic", 1, 3600)).unwrap();
+        store
+            .store_descriptor(make_descriptor(&kp, "topic", 1, 3600))
+            .unwrap();
 
         let filter = FilterSet {
             schema_hash: Some(schema_hash("core/capability")),
@@ -414,8 +418,12 @@ mod tests {
         let kp2 = Keypair::generate();
         let rk = routing_key("compute/inference/text-generation");
 
-        store.store_descriptor(make_descriptor(&kp1, "topic", 1, 3600)).unwrap();
-        store.store_descriptor(make_descriptor(&kp2, "topic", 1, 3600)).unwrap();
+        store
+            .store_descriptor(make_descriptor(&kp1, "topic", 1, 3600))
+            .unwrap();
+        store
+            .store_descriptor(make_descriptor(&kp2, "topic", 1, 3600))
+            .unwrap();
 
         let filter = FilterSet {
             publisher: Some(kp1.identity()),

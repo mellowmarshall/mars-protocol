@@ -4,8 +4,8 @@
 //! (most recent last). The bucket index is determined by the XOR distance
 //! between the local node ID and the remote node ID.
 
-use mesh_core::message::NodeInfo;
 use mesh_core::Hash;
+use mesh_core::message::NodeInfo;
 
 use crate::distance::{bucket_index, distance_cmp, xor_distance};
 
@@ -110,11 +110,8 @@ impl RoutingTable {
     /// Return the `count` closest nodes to the target hash from the routing table,
     /// sorted by XOR distance (closest first).
     pub fn closest_nodes(&self, target: &Hash, count: usize) -> Vec<NodeInfo> {
-        let mut all_nodes: Vec<&NodeInfo> = self
-            .buckets
-            .iter()
-            .flat_map(|b| b.entries.iter())
-            .collect();
+        let mut all_nodes: Vec<&NodeInfo> =
+            self.buckets.iter().flat_map(|b| b.entries.iter()).collect();
 
         all_nodes.sort_by(|a, b| {
             let id_a = a.identity.node_id();
@@ -307,11 +304,13 @@ mod tests {
                     assert_eq!(last.identity, expected_last.identity());
                     // The first node should have been evicted
                     let first_node_id = nodes_by_bucket[target_bucket][0].identity();
-                    assert!(!table
-                        .bucket(target_bucket)
-                        .entries
-                        .iter()
-                        .any(|e| e.identity == first_node_id));
+                    assert!(
+                        !table
+                            .bucket(target_bucket)
+                            .entries
+                            .iter()
+                            .any(|e| e.identity == first_node_id)
+                    );
                     return;
                 }
             }

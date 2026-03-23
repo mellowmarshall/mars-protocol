@@ -3,17 +3,19 @@
 //! `DhtNode` is the main entry point for DHT operations: handling incoming
 //! protocol messages and performing iterative lookups.
 
-use mesh_core::frame::{MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT};
+use mesh_core::frame::{
+    MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT,
+};
 use mesh_core::identity::{Identity, Keypair};
 use mesh_core::message::{
-    FilterSet, FindNode, FindNodeResult, FindValue, FindValueResult, NodeAddr, NodeInfo, Ping,
-    Pong, Store, StoreAck, from_cbor, to_cbor,
+    FindNode, FindNodeResult, FindValue, FindValueResult, NodeAddr, NodeInfo, Ping, Pong, Store,
+    StoreAck, from_cbor, to_cbor,
 };
 use mesh_core::{Descriptor, Frame, Hash};
 
 use crate::distance::distance_cmp;
-use crate::routing::{RoutingTable, K};
-use crate::storage::{DescriptorStore, StoreError};
+use crate::routing::{K, RoutingTable};
+use crate::storage::DescriptorStore;
 use crate::transport::{Transport, TransportError};
 
 /// Configuration for a DHT node.
@@ -67,6 +69,11 @@ impl DhtNode {
             store: DescriptorStore::new(),
             config,
         }
+    }
+
+    /// Get this node's keypair.
+    pub fn keypair(&self) -> &Keypair {
+        &self.keypair
     }
 
     /// Get this node's identity.
@@ -208,17 +215,17 @@ impl DhtNode {
 
                 match transport.send_request(&node.addr, frame).await {
                     Ok(resp) => {
-                        if resp.msg_type == MSG_FIND_VALUE_RESULT {
-                            if let Ok(result) = from_cbor::<FindValueResult>(&resp.body) {
-                                if let Some(descs) = result.descriptors {
-                                    collected_descriptors.extend(descs);
-                                }
-                                if let Some(nodes) = result.nodes {
-                                    // Add new nodes to routing table and candidates
-                                    for n in nodes {
-                                        self.routing_table.add_node(n.clone());
-                                        new_nodes.push(n);
-                                    }
+                        if resp.msg_type == MSG_FIND_VALUE_RESULT
+                            && let Ok(result) = from_cbor::<FindValueResult>(&resp.body)
+                        {
+                            if let Some(descs) = result.descriptors {
+                                collected_descriptors.extend(descs);
+                            }
+                            if let Some(nodes) = result.nodes {
+                                // Add new nodes to routing table and candidates
+                                for n in nodes {
+                                    self.routing_table.add_node(n.clone());
+                                    new_nodes.push(n);
                                 }
                             }
                         }
@@ -275,12 +282,12 @@ impl DhtNode {
 
             match transport.send_request(seed_addr, frame).await {
                 Ok(resp) => {
-                    if resp.msg_type == MSG_FIND_NODE_RESULT {
-                        if let Ok(result) = from_cbor::<FindNodeResult>(&resp.body) {
-                            for node in result.nodes {
-                                self.routing_table.add_node(node);
-                                discovered += 1;
-                            }
+                    if resp.msg_type == MSG_FIND_NODE_RESULT
+                        && let Ok(result) = from_cbor::<FindNodeResult>(&resp.body)
+                    {
+                        for node in result.nodes {
+                            self.routing_table.add_node(node);
+                            discovered += 1;
                         }
                     }
                 }
@@ -316,6 +323,7 @@ impl DhtNode {
 mod tests {
     use super::*;
     use mesh_core::hash::schema_hash;
+    use mesh_core::message::FilterSet;
     use mesh_core::routing::routing_key;
     use std::collections::HashMap;
     use std::sync::Mutex;
@@ -379,16 +387,16 @@ mod tests {
                     let req: FindNode = from_cbor(&frame.body)
                         .map_err(|e| TransportError::FrameError(e.to_string()))?;
                     let result = node.handle_find_node(&req);
-                    let body = to_cbor(&result)
-                        .map_err(|e| TransportError::FrameError(e.to_string()))?;
+                    let body =
+                        to_cbor(&result).map_err(|e| TransportError::FrameError(e.to_string()))?;
                     Ok(Frame::response(&frame, MSG_FIND_NODE_RESULT, body))
                 }
                 MSG_FIND_VALUE => {
                     let req: FindValue = from_cbor(&frame.body)
                         .map_err(|e| TransportError::FrameError(e.to_string()))?;
                     let result = node.handle_find_value(&req);
-                    let body = to_cbor(&result)
-                        .map_err(|e| TransportError::FrameError(e.to_string()))?;
+                    let body =
+                        to_cbor(&result).map_err(|e| TransportError::FrameError(e.to_string()))?;
                     Ok(Frame::response(&frame, MSG_FIND_VALUE_RESULT, body))
                 }
                 _ => Err(TransportError::FrameError(format!(

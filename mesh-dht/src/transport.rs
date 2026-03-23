@@ -5,8 +5,8 @@
 
 use std::future::Future;
 
-use mesh_core::message::NodeAddr;
 use mesh_core::Frame;
+use mesh_core::message::NodeAddr;
 
 /// Errors from transport operations.
 #[derive(Debug, thiserror::Error)]
