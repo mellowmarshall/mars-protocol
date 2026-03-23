@@ -12,6 +12,8 @@ use quinn::crypto::rustls::QuicServerConfig;
 use quinn::{ClientConfig, Endpoint, ServerConfig, TransportConfig, VarInt};
 use tracing::{debug, error, info, instrument};
 
+use mesh_core::identity::Keypair;
+
 use crate::connection::{MeshConnection, accept_request};
 use crate::error::{Result, TransportError};
 use crate::tls;
@@ -40,11 +42,11 @@ pub struct MeshEndpoint {
 impl MeshEndpoint {
     /// Create a new mesh endpoint bound to the given address.
     ///
-    /// Generates a self-signed TLS certificate and configures QUIC
-    /// per the protocol spec (Section 8.1).
+    /// Generates a self-signed TLS certificate derived from the given
+    /// mesh keypair and configures QUIC per the protocol spec (Section 8.1).
     #[instrument(skip_all, fields(%addr))]
-    pub fn new(addr: SocketAddr) -> Result<Self> {
-        let (cert_chain, key) = tls::generate_self_signed_cert()?;
+    pub fn new(addr: SocketAddr, keypair: &Keypair) -> Result<Self> {
+        let (cert_chain, key) = tls::generate_self_signed_cert(keypair)?;
         let server_crypto = tls::server_crypto_config(cert_chain, key)?;
         let client_crypto = tls::client_crypto_config()?;
 
@@ -92,12 +94,15 @@ impl MeshEndpoint {
     /// For each incoming connection, spawns a tokio task that accepts
     /// bidirectional streams and calls `handler` with each request.
     ///
-    /// The handler receives the request frame and a response sender,
-    /// and should return the response frame.
+    /// The handler receives the request frame, a response sender, and the
+    /// peer's authenticated mesh identity (extracted from their TLS cert).
     #[instrument(skip_all)]
     pub async fn listen<F, Fut>(&self, handler: F) -> Result<()>
     where
-        F: Fn(mesh_core::Frame, crate::connection::ResponseSender) -> Fut + Send + Sync + 'static,
+        F: Fn(mesh_core::Frame, crate::connection::ResponseSender, Option<mesh_core::identity::Identity>) -> Fut
+            + Send
+            + Sync
+            + 'static,
         Fut: Future<Output = ()> + Send,
     {
         let handler = Arc::new(handler);
@@ -111,14 +116,17 @@ impl MeshEndpoint {
                         let peer = conn.remote_address();
                         debug!(%peer, "accepted connection");
                         let mesh_conn = MeshConnection::new(conn);
+                        // Extract peer's mesh identity from their TLS cert once per connection
+                        let peer_identity = mesh_conn.peer_mesh_identity();
                         loop {
                             match mesh_conn.accept_stream().await {
                                 Ok((send, recv)) => {
                                     let handler = handler.clone();
+                                    let peer_identity = peer_identity.clone();
                                     tokio::spawn(async move {
                                         match accept_request(send, recv).await {
                                             Ok((frame, sender)) => {
-                                                handler(frame, sender).await;
+                                                handler(frame, sender, peer_identity).await;
                                             }
                                             Err(e) => {
                                                 debug!("stream request error: {e}");

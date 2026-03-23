@@ -1,0 +1,12 @@
+[package]
+name = "mesh-client"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mesh-core = { path = "../mesh-core" }
+mesh-dht = { path = "../mesh-dht" }
+mesh-transport = { path = "../mesh-transport" }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

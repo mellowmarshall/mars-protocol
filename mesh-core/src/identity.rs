@@ -36,12 +36,15 @@ impl Identity {
         }
     }
 
-    /// Derive the DID for this identity: `did:mesh:<base58btc(algo || pubkey)>`.
+    /// Derive the DID for this identity: `did:mesh:z<base58btc(algo || pubkey)>`.
+    ///
+    /// The `z` prefix is the multibase identifier for base58btc encoding,
+    /// per the multibase specification referenced in Section 1.3.
     pub fn did(&self) -> String {
         let mut bytes = Vec::with_capacity(1 + self.public_key.len());
         bytes.push(self.algorithm);
         bytes.extend_from_slice(&self.public_key);
-        format!("did:mesh:{}", bs58::encode(&bytes).into_string())
+        format!("did:mesh:z{}", bs58::encode(&bytes).into_string())
     }
 
     /// Verify a signature over the given message using this identity's public key.
@@ -141,7 +144,7 @@ mod tests {
         let kp = Keypair::generate();
         let id = kp.identity();
         let did = id.did();
-        assert!(did.starts_with("did:mesh:"));
+        assert!(did.starts_with("did:mesh:z"));
         // DID should be deterministic
         assert_eq!(did, id.did());
     }
@@ -193,8 +196,8 @@ mod tests {
         let kp = Keypair::generate();
         let id = kp.identity();
         let did = id.did();
-        // Extract the base58 part
-        let encoded = did.strip_prefix("did:mesh:").unwrap();
+        // Strip "did:mesh:z" — the z is the multibase base58btc prefix
+        let encoded = did.strip_prefix("did:mesh:z").unwrap();
         let decoded = bs58::decode(encoded).into_vec().unwrap();
         assert_eq!(decoded[0], ALG_ED25519);
         assert_eq!(&decoded[1..], &id.public_key);
@@ -220,10 +223,10 @@ mod tests {
         let kp = Keypair::generate();
         let id = kp.identity();
         let did = id.did();
-        // Must start with did:mesh:
-        assert!(did.starts_with("did:mesh:"));
+        // Must start with did:mesh:z (z = multibase base58btc)
+        assert!(did.starts_with("did:mesh:z"));
         // Decode and verify format: algo_byte || pubkey_bytes
-        let encoded = did.strip_prefix("did:mesh:").unwrap();
+        let encoded = did.strip_prefix("did:mesh:z").unwrap();
         let decoded = bs58::decode(encoded).into_vec().unwrap();
         assert_eq!(decoded.len(), 33); // 1 byte algo + 32 bytes pubkey
         assert_eq!(decoded[0], ALG_ED25519);

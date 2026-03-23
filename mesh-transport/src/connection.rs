@@ -1,10 +1,12 @@
 //! Connection management for mesh QUIC transport.
 
 use mesh_core::Frame;
+use mesh_core::identity::Identity;
 use quinn::{Connection, RecvStream, SendStream};
 use tracing::{debug, instrument};
 
 use crate::error::{Result, TransportError};
+use crate::tls;
 
 /// Maximum frame body size (1 MB per Section 8.1 max stream data).
 const MAX_FRAME_BODY: usize = 1_048_576;
@@ -42,6 +44,19 @@ impl MeshConnection {
     pub fn close(&self, reason: &str) {
         self.inner
             .close(quinn::VarInt::from_u32(0), reason.as_bytes());
+    }
+
+    /// Extract the peer's mesh [`Identity`] from their TLS certificate.
+    ///
+    /// After the QUIC handshake, the peer's Ed25519 public key is extracted
+    /// from their self-signed TLS certificate. This IS their mesh identity —
+    /// no additional authentication is needed because TLS already proved they
+    /// hold the corresponding private key.
+    pub fn peer_mesh_identity(&self) -> Option<Identity> {
+        let certs = self.inner.peer_identity()?;
+        let certs = certs.downcast::<Vec<rustls::pki_types::CertificateDer<'static>>>().ok()?;
+        let first_cert = certs.first()?;
+        tls::identity_from_cert_der(first_cert.as_ref())
     }
 
     /// Get the underlying quinn connection.

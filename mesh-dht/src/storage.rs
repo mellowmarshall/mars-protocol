@@ -58,6 +58,40 @@ impl RateLimiter {
     }
 }
 
+/// Trait for pluggable descriptor storage backends.
+///
+/// The default in-memory implementation is [`DescriptorStore`]. Downstream crates
+/// can implement this trait for persistent backends (SQLite, Postgres, etc.).
+pub trait DescriptorStorage: Send + Sync {
+    /// Store a descriptor after validation.
+    fn store_descriptor(&mut self, descriptor: Descriptor) -> Result<(), StoreError>;
+    /// Store a descriptor with an explicit timestamp (for testing).
+    fn store_descriptor_at(
+        &mut self,
+        descriptor: Descriptor,
+        now_micros: u64,
+    ) -> Result<(), StoreError>;
+    /// Retrieve descriptors at a routing key, optionally applying filters.
+    fn get_descriptors(&self, routing_key: &Hash, filters: Option<&FilterSet>) -> Vec<Descriptor>;
+    /// Retrieve descriptors with an explicit timestamp (for testing).
+    fn get_descriptors_at(
+        &self,
+        routing_key: &Hash,
+        filters: Option<&FilterSet>,
+        now_micros: u64,
+    ) -> Vec<Descriptor>;
+    /// Remove all expired descriptors from the store.
+    fn evict_expired(&mut self);
+    /// Remove expired descriptors with an explicit timestamp (for testing).
+    fn evict_expired_at(&mut self, now_micros: u64);
+    /// Check if we have any descriptors at a routing key.
+    fn has_descriptors(&self, routing_key: &Hash) -> bool;
+    /// Total number of descriptors stored.
+    fn descriptor_count(&self) -> usize;
+    /// Number of unique routing keys with stored descriptors.
+    fn routing_key_count(&self) -> usize;
+}
+
 /// In-memory descriptor storage for the DHT node.
 #[derive(Debug)]
 pub struct DescriptorStore {
@@ -259,6 +293,53 @@ impl DescriptorStore {
 impl Default for DescriptorStore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl DescriptorStorage for DescriptorStore {
+    fn store_descriptor(&mut self, descriptor: Descriptor) -> Result<(), StoreError> {
+        DescriptorStore::store_descriptor(self, descriptor)
+    }
+
+    fn store_descriptor_at(
+        &mut self,
+        descriptor: Descriptor,
+        now_micros: u64,
+    ) -> Result<(), StoreError> {
+        DescriptorStore::store_descriptor_at(self, descriptor, now_micros)
+    }
+
+    fn get_descriptors(&self, routing_key: &Hash, filters: Option<&FilterSet>) -> Vec<Descriptor> {
+        DescriptorStore::get_descriptors(self, routing_key, filters)
+    }
+
+    fn get_descriptors_at(
+        &self,
+        routing_key: &Hash,
+        filters: Option<&FilterSet>,
+        now_micros: u64,
+    ) -> Vec<Descriptor> {
+        DescriptorStore::get_descriptors_at(self, routing_key, filters, now_micros)
+    }
+
+    fn evict_expired(&mut self) {
+        DescriptorStore::evict_expired(self);
+    }
+
+    fn evict_expired_at(&mut self, now_micros: u64) {
+        DescriptorStore::evict_expired_at(self, now_micros);
+    }
+
+    fn has_descriptors(&self, routing_key: &Hash) -> bool {
+        DescriptorStore::has_descriptors(self, routing_key)
+    }
+
+    fn descriptor_count(&self) -> usize {
+        DescriptorStore::descriptor_count(self)
+    }
+
+    fn routing_key_count(&self) -> usize {
+        DescriptorStore::routing_key_count(self)
     }
 }
 

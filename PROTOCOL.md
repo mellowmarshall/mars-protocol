@@ -46,15 +46,26 @@ Algorithms are identified by a single byte. The initial registry:
 | 0x06 | ML-KEM-768     | KeyExch   | varies      | Reserved   |
 | 0x80–0xFF | —         | —         | —           | User-defined |
 
-New algorithm IDs (0x07–0x7F) are allocated by publishing a schema descriptor
-of type `core/algorithm-registration` to the mesh. No governance body required —
-the content-hash of the algorithm definition *is* the registration. Conflicts
-are resolved by adoption (whichever ID gains critical mass wins).
+New algorithm IDs in the public range (0x07–0x7F) are allocated by publishing a
+schema descriptor of type `core/algorithm-registration` to the mesh. The
+descriptor's `id` (content-hash) serves as the collision-free registration
+identifier — two registrations with different definitions produce different IDs,
+so conflicts are structurally impossible. Adoption determines which ID is used
+in practice; implementations SHOULD prefer the ID with the widest deployment.
 
-Post-quantum algorithms (ML-DSA, ML-KEM) are reserved now and activated when
-implementations mature. Nodes MUST accept descriptors signed with any algorithm
-they understand and MUST ignore (not reject) descriptors signed with algorithms
-they don't.
+User-defined IDs (0x80–0xFF) are for local or experimental use only. They carry
+no interoperability guarantee — two independent deployments MAY assign the same
+user-defined ID to different algorithms. Descriptors using user-defined
+algorithm IDs SHOULD NOT be published to the public mesh.
+
+Post-quantum algorithms (ML-DSA-65, ML-KEM-768) are **reserved pending
+implementation**. Activation requires a published specification for hybrid
+signing mode (PQ + classical dual-signature) to ensure backwards compatibility
+during the transition period. Until that specification exists, implementations
+MUST NOT use algorithm IDs 0x02 or 0x06 for signing or key exchange.
+
+Nodes MUST accept descriptors signed with any algorithm they understand and
+MUST ignore (not reject) descriptors signed with algorithms they don't.
 
 ### 1.2 Hash Format
 
@@ -94,7 +105,8 @@ encoding of the algorithm-tagged public key.
 
 ### 1.4 Signature Envelope
 
-Every signed structure in the protocol uses:
+The `Signed<T>` envelope is defined for future protocol versions that may
+support non-TLS transports:
 
 ```
 Signed<T> {
@@ -107,6 +119,27 @@ Signed<T> {
 Verification: deserialize `identity`, verify `signature` over `payload` bytes
 using the algorithm specified in `identity.algorithm`. If the algorithm is
 unknown, the message is unverifiable (not invalid — skip, don't reject).
+
+> **Version 0x01 note:** Protocol messages (PING, STORE, FIND_NODE, FIND_VALUE)
+> are **not** wrapped in `Signed<T>`. Authentication is provided by TLS identity
+> binding (Section 3.1.1). Descriptors use their own signature scheme (Section 2)
+> independent of `Signed<T>`. The `Signed<T>` envelope is retained in the spec
+> for forward compatibility but is not used on the wire in version 0x01.
+
+### 1.5 CBOR Wire Format Rules
+
+All CBOR-encoded message bodies (Section 3.2) MUST conform to these rules:
+
+1. Each frame body contains exactly **one CBOR data item**.
+2. The CBOR self-describing tag (tag 55799 / `0xd9d9f7`) MUST NOT be used.
+3. Map keys MUST NOT be duplicated within the same map.
+4. Indefinite-length encoding MUST NOT be used for any data item.
+5. No trailing bytes are permitted after the CBOR data item.
+
+A receiver that encounters a violation of these rules SHOULD reject the
+message. These rules apply to all wire-format messages. The canonical
+serialization for content-addressing (Appendix C) has additional requirements
+(deterministic key ordering).
 
 ---
 
@@ -180,7 +213,9 @@ A node MUST validate before storing or forwarding a descriptor:
 7. Check `topic` length ≤ 255 bytes. Reject if exceeded.
 8. Check `sequence` ≥ any previously seen sequence for this `publisher` +
    `schema_hash` + `topic` combination. If lower, this is a stale
-   descriptor — ignore.
+   descriptor — ignore. If equal and the descriptor `id` differs from the
+   stored version, this is a conflicting update — reject. Equal sequence
+   with the same `id` is an idempotent republish — accept.
 
 The node MUST NOT validate the payload against the schema. The payload is
 opaque to the protocol layer. Schema validation is the consumer's
@@ -210,6 +245,25 @@ Negotiation) identifier is `mesh/0`.
 
 Each QUIC connection supports multiple concurrent bidirectional streams.
 Each stream carries exactly one request-response pair.
+
+#### 3.1.1 TLS Identity Binding
+
+In protocol version 0x01, message authentication uses **TLS identity binding**
+rather than per-message `Signed<T>` envelopes (Section 1.4). Each node
+generates a self-signed TLS certificate whose public key is its Ed25519 mesh
+keypair. During the QUIC handshake, both peers present their TLS certificates.
+The peer's mesh identity is extracted from their TLS certificate — no
+additional authentication step is needed because TLS already proves possession
+of the corresponding private key.
+
+A receiving node MUST verify that the `sender` field in each incoming message
+matches the identity from the peer's TLS certificate. Mismatches indicate
+spoofing and MUST cause the message to be rejected.
+
+This model provides per-connection authentication with zero per-message
+overhead. Descriptor signatures (Section 2) remain independent of transport
+authentication — descriptors are verified by their content hash and signature
+regardless of how they were received.
 
 ### 3.2 Message Frame
 
@@ -275,6 +329,7 @@ from what you think it is, you're behind a NAT.
 ```cbor
 {
   "sender": Identity,
+  "sender_addr": NodeAddr,   // sender's QUIC endpoint
   "descriptor": Descriptor   // the full descriptor to store
 }
 ```
@@ -301,6 +356,7 @@ A node MAY refuse storage for capacity reasons without penalty.
 ```cbor
 {
   "sender": Identity,
+  "sender_addr": NodeAddr,   // sender's QUIC endpoint
   "target": Hash             // the DHT key to find nodes near
 }
 ```
@@ -327,6 +383,7 @@ from the responding node's routing table.
 ```cbor
 {
   "sender": Identity,
+  "sender_addr": NodeAddr,   // sender's QUIC endpoint
   "key": Hash,               // the routing key to search for
   "max_results": u16,        // max descriptors to return (default 20)
   "filters": FilterSet?      // optional payload-level filters (see 3.7.1)
@@ -336,15 +393,21 @@ from the responding node's routing table.
 **FIND_VALUE_RESULT (0x84):**
 ```cbor
 {
-  // Exactly one of these will be populated:
-  "descriptors": [Descriptor]?,  // if this node has matching descriptors
-  "nodes": [NodeInfo]?           // if not, closest nodes to continue searching
+  // Exactly one of these MUST be present (see below):
+  "descriptors": [Descriptor],  // if this node has matching descriptors
+  "nodes": [NodeInfo]           // if not, closest nodes to continue searching
 }
 ```
 
-If the node has descriptors stored at `key`, it returns them. Otherwise it
-returns the closest nodes it knows of, and the requester continues the
-iterative lookup (standard Kademlia).
+If the node has descriptors stored at `key`, it returns them in the
+`descriptors` field. Otherwise it returns the closest nodes it knows of in the
+`nodes` field, and the requester continues the iterative lookup (standard
+Kademlia).
+
+**One-of semantics:** A valid response contains exactly one of `descriptors` or
+`nodes`. The absent field MUST be omitted from the CBOR map (not encoded as
+`null`). A receiver MUST reject a response that contains both fields or neither
+field.
 
 #### 3.7.1 Filters
 
@@ -493,8 +556,8 @@ constraints = {
 }
 
 geo-constraint = {
-  ? center:      [float, float],         ; [lat, lon]
-  ? radius_km:   float,                  ; service radius
+  ? center:      [int, int],             ; [lat, lon] in microdegrees (1e-6°, e.g. 37774900 = 37.7749°)
+  ? radius_m:    uint,                   ; service radius in meters (e.g. 100000 = 100 km)
   ? regions:     [* tstr]                ; named regions (ISO 3166, free-form)
 }
 
@@ -512,7 +575,7 @@ time-window = {
 }
 
 capacity-constraint = {
-  ? current_load: float,                 ; 0.0–1.0 utilization
+  ? current_load_permille: uint,         ; 0–1000 utilization (e.g. 300 = 30.0%)
   ? max_concurrent: uint,               ; max parallel requests
   ? queue_depth: uint                    ; current queue depth
 }
@@ -549,8 +612,8 @@ discovery-query = {
 }
 
 query-constraints = {
-  ? geo:         { ? center: [float, float], ? radius_km: float },
-  ? min_capacity: float,                 ; minimum available capacity (0.0–1.0)
+  ? geo:         { ? center: [int, int], ? radius_m: uint },
+  ? min_capacity_permille: uint,         ; minimum available capacity (0–1000)
   ? max_price:   { currency: tstr, amount: tstr },
   ? available_now: bool                  ; must be currently available
 }
@@ -568,15 +631,15 @@ Resolve uses a QUIC stream to the provider's endpoint address.
 
 ```cddl
 resolve-request = {
-  descriptor_id: bstr,                  ; the descriptor ID being resolved
-  requester:     bstr,                  ; requester's DID
+  descriptor_id: Hash,                  ; the descriptor ID being resolved (Section 1.2)
+  requester:     Identity,              ; requester's identity (Section 1.3)
   ? intent:      { * tstr => any }      ; optional: what the requester wants to do
 }
 
 resolve-response = {
   status:        tstr,                  ; "available" | "busy" | "unavailable" | "moved"
-  descriptor_id: bstr,                  ; echo back
-  ? updated:     bstr,                  ; if "moved", new descriptor ID
+  descriptor_id: Hash,                  ; echo back
+  ? updated:     Hash,                  ; if "moved", new descriptor ID
   ? terms:       { * tstr => any },     ; current terms (pricing, ETA, constraints)
   ? challenge:   bstr                   ; optional DID-auth challenge for the requester
 }
@@ -591,9 +654,9 @@ on the DHT at the same routing keys as the original.
 
 ```cddl
 revocation = {
-  target_id:     bstr,                  ; descriptor ID being revoked
+  target_id:     Hash,                  ; descriptor ID being revoked (Section 1.2)
   reason:        tstr,                  ; "expired" | "superseded" | "compromised" | "withdrawn"
-  ? successor:   bstr                   ; if superseded, the new descriptor ID
+  ? successor:   Hash                   ; if superseded, the new descriptor ID
 }
 ```
 
@@ -653,16 +716,28 @@ Schema hash: `BLAKE3("mesh:schema:core/key-rotation")` (well-known)
 
 ```cddl
 key-rotation = {
-  old_identity:  bstr,                  ; old public key (Identity)
-  new_identity:  bstr,                  ; new public key (Identity)
+  old_identity:  Identity,              ; old public key (Section 1.3)
+  new_identity:  Identity,              ; new public key (Section 1.3)
+  rotation_seq:  uint,                  ; monotonically increasing rotation counter (starts at 1)
   effective:     uint,                  ; timestamp when rotation takes effect
-  old_signature: bstr                   ; signature of new_identity by old key
+  old_signature: bstr,                  ; signature of new_identity by old key
+  new_signature: bstr                   ; signature of old_identity by new key
 }
 ```
 
-This descriptor MUST be signed by the OLD key (proving ownership) and
-the `old_signature` field contains a signature of the new identity by the
-old key (double proof). Nodes receiving this update their routing tables.
+This descriptor MUST be signed by the OLD key (proving ownership). Both
+`old_signature` (old key signs new identity) and `new_signature` (new key
+signs old identity) MUST be present, providing bidirectional proof of key
+control.
+
+The `rotation_seq` counter MUST be strictly greater than any previously seen
+rotation sequence for this identity. Nodes MUST reject rotation descriptors
+with a `rotation_seq` ≤ the highest previously accepted value for the same
+`old_identity`. This prevents replay of superseded rotations.
+
+If a node receives two rotation descriptors for the same `old_identity` with
+the same `rotation_seq` but different `new_identity` values, this is a fork —
+the node MUST reject both and treat the old identity as compromised.
 
 After rotation, the old key is considered inactive. Descriptors signed by
 the old key remain valid until their TTL expires, then are replaced by
@@ -703,7 +778,20 @@ persistent and ephemeral identities — there's no "registration" step.
 | Max stream data | 1 MB | Limit per-stream memory |
 | Keep-alive | 10s | Below NAT timeout thresholds |
 
-### 8.2 Connection Multiplexing
+### 8.2 TLS Certificate Derivation
+
+Each node generates a self-signed TLS certificate from its Ed25519 mesh
+keypair. The certificate's public key is the node's mesh public key. Peer
+nodes extract the mesh identity from the TLS certificate after the QUIC
+handshake completes (see Section 3.1.1).
+
+Nodes SHOULD use permissive TLS verification (accept any peer certificate)
+since authentication is based on the mesh identity extracted from the
+certificate, not on certificate authority chains. The TLS layer provides
+encryption and identity binding; trust decisions are made at the protocol
+layer via descriptor signatures.
+
+### 8.3 Connection Multiplexing
 
 A single QUIC connection between two nodes can carry multiple concurrent
 protocol exchanges. Each exchange uses its own bidirectional stream:
@@ -711,7 +799,7 @@ one frame sent, one frame received, then the stream closes.
 
 Nodes SHOULD reuse connections to peers they communicate with frequently.
 
-### 8.3 NAT Traversal
+### 8.4 NAT Traversal
 
 QUIC's connection migration and the `observed_addr` field in PONG enable
 basic NAT detection. For nodes behind restrictive NATs:
@@ -803,6 +891,10 @@ An attacker flooding the DHT with garbage descriptors. Mitigations:
   in descriptors.
 - **QUIC encrypts transport** — all communication is encrypted in transit.
   Node operators cannot eavesdrop on other nodes' conversations.
+- **TLS binds identity to transport** — each node's TLS certificate is
+  derived from its mesh keypair (Section 8.2). The `sender` field in every
+  message is verified against the TLS-authenticated peer identity
+  (Section 3.1.1), preventing identity spoofing within a connection.
 
 ---
 
@@ -837,7 +929,7 @@ Agent wants to advertise text generation inference:
        "throughput_tps": 150
      },
      "constraints": {
-       "capacity": { "current_load": 0.3, "max_concurrent": 10 },
+       "capacity": { "current_load_permille": 300, "max_concurrent": 10 },
        "pricing": { "model": "per-token", "currency": "USD", "amount": "0.0001" }
      },
      "endpoint": {
@@ -1173,12 +1265,18 @@ For Layer 1 changes (if ever needed):
 
 ## Appendix A: CBOR Tag Assignments
 
-| Tag | Semantics |
-|-----|-----------|
-| 42  | Mesh Identity (algorithm + public_key) |
-| 43  | Mesh Hash (algorithm + digest) |
-| 44  | Mesh Descriptor |
-| 45  | Mesh Frame |
+| Tag | Semantics | Status |
+|-----|-----------|--------|
+| 42  | Mesh Identity (algorithm + public_key) | Reserved |
+| 43  | Mesh Hash (algorithm + digest) | Reserved |
+| 44  | Mesh Descriptor | Reserved |
+| 45  | Mesh Frame | Reserved |
+
+**Version 0x01 note:** Tags 42–45 are **reserved but NOT used** in protocol
+version 0x01. All mesh types are encoded as plain CBOR arrays or maps without
+tags. These tag assignments are reserved for future protocol versions that may
+benefit from self-describing type markers. Implementations MUST NOT emit these
+tags in v0x01 and SHOULD ignore (not reject) them if encountered.
 
 Standard CBOR tags (RFC 8949) are used for dates, big integers, etc.
 
@@ -1240,18 +1338,18 @@ Keys MUST appear in the map in the order shown above (which is lexicographic).
 | sequence | `1` |
 | ttl | `3600` |
 | routing_keys[0].algorithm | `0x03` (BLAKE3) |
-| routing_keys[0].digest | `eea1159ae33052b4a1c6e6cd41b1c923642fd9879aebb2b875458d785b9ae4f5` |
+| routing_keys[0].digest | `235ad34c1ac90b981ab12865b8d4d5d4d18708fc614cec7fd1d01fad82c6b69a` |
 
 **Schema hash** is computed as `BLAKE3("mesh:schema:core/capability")`.
-**Routing key** is computed as `BLAKE3("mesh:routing:compute/inference/text-generation")`.
+**Routing key** is computed as `BLAKE3("mesh:route:compute/inference/text-generation")`.
 
 **Canonical CBOR (hex, 219 bytes):**
 
 ```
 a8677061796c6f61644c74657374207061796c6f6164697075626c697368657282
 0158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f
-6f5c6c726f7574696e675f6b6579738182035820eea1159ae33052b4a1c6e6cd41
-b1c923642fd9879aebb2b875458d785b9ae4f56b736368656d615f686173688203
+6f5c6c726f7574696e675f6b6579738182035820235ad34c1ac90b981ab12865b8
+d4d5d4d18708fc614cec7fd1d01fad82c6b69a6b736368656d615f686173688203
 5820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3
 306873657175656e6365016974696d657374616d701b00060a24181e400065746f
 7069636a746573742d746f7069636374746c190e10
@@ -1260,17 +1358,49 @@ b1c923642fd9879aebb2b875458d785b9ae4f56b736368656d615f686173688203
 **BLAKE3 descriptor ID (hex):**
 
 ```
-321631d68f034cbdb122eaaaefe9216370f28020900239dfcdbefa66c14df507
+a38b23b474083f46592c4584728addb830f35e98434a0010d3d0b4e63c2f0581
 ```
 
-### C.4 Conformance
+### C.4 Additional Test Vectors
+
+The following derived values use the same test keypair (secret key `0x0101...01`)
+and are normative conformance tests.
+
+**DID derivation** (Section 1.3):
+```
+Input:  algorithm = 0x01, public_key = 8a88e3dd...b40f6f5c
+DID:    did:mesh:zTZ6hZA8FqG1H8PDWqZw5P82o2zWooN8rZwdyTFiLwPoR
+```
+
+**Node ID** (Section 4.2):
+```
+Input:  public_key = 8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c
+BLAKE3: 83561adb398fd87f8e7ed8331bff2fcb945733cc3012879cb9fab07928667062
+```
+
+**Schema hash** (Appendix B):
+```
+Input:  "mesh:schema:core/capability"
+BLAKE3: bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb330
+```
+
+**Routing key** (Section 4.4):
+```
+Input:  "mesh:route:compute/inference/text-generation"
+BLAKE3: 235ad34c1ac90b981ab12865b8d4d5d4d18708fc614cec7fd1d01fad82c6b69a
+
+Input:  "mesh:route:compute"
+BLAKE3: 5f018ea0521ff05d0e18d582690642872ebed45afcd93eb82515dba44dc30547
+```
+
+### C.5 Conformance
 
 Implementations **MUST** produce byte-identical canonical CBOR for the same input
-fields. The test vector in this appendix is the conformance test.
+fields. The test vectors in this appendix are the conformance tests.
 
 If your implementation produces the BLAKE3 hash
-`321631d68f034cbdb122eaaaefe9216370f28020900239dfcdbefa66c14df507` for the
-test vector inputs above, your canonical serialization is correct.
+`a38b23b474083f46592c4584728addb830f35e98434a0010d3d0b4e63c2f0581` for the
+descriptor test vector inputs above, your canonical serialization is correct.
 
 ---
 

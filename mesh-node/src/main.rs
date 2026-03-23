@@ -18,7 +18,7 @@ use mesh_core::frame::{
 use mesh_core::hash::schema_hash;
 use mesh_core::identity::Keypair;
 use mesh_core::message::{
-    FindNode, FindValue, FindValueResult, NodeAddr, Ping, Pong, Store, StoreAck, from_cbor, to_cbor,
+    FindNode, FindValue, NodeAddr, Ping, Pong, Store, StoreAck, from_cbor, to_cbor,
 };
 use mesh_core::routing::{hierarchical_routing_keys, routing_key};
 use mesh_core::{Descriptor, Frame};
@@ -109,6 +109,21 @@ fn now_micros() -> u64 {
         .as_micros() as u64
 }
 
+/// Write bytes to a file with restrictive permissions (0600).
+fn write_secret_file(path: &std::path::Path, data: &[u8]) {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)
+        .expect("failed to create identity file");
+    file.write_all(data)
+        .expect("failed to write identity file");
+}
+
 /// Load or generate a keypair.
 fn load_or_generate_keypair(path: Option<&PathBuf>) -> Keypair {
     if let Some(p) = path {
@@ -119,12 +134,12 @@ fn load_or_generate_keypair(path: Option<&PathBuf>) -> Keypair {
                 .expect("identity file must be exactly 32 bytes");
             return Keypair::from_bytes(&secret);
         }
-        // Generate and save
+        // Generate and save with restrictive permissions
         let kp = Keypair::generate();
         if let Some(parent) = p.parent() {
             std::fs::create_dir_all(parent).expect("failed to create identity directory");
         }
-        std::fs::write(p, kp.secret_bytes()).expect("failed to write identity file");
+        write_secret_file(p, &kp.secret_bytes());
         kp
     } else {
         Keypair::generate()
@@ -142,62 +157,103 @@ fn make_node_addr(addr: &str) -> NodeAddr {
     }
 }
 
+/// Check that the message's `sender` field matches the TLS-authenticated peer identity.
+///
+/// Returns `true` if the sender is verified or if the peer identity couldn't be
+/// extracted (e.g., in tests without mutual TLS). Rejects mismatches where the
+/// peer's TLS cert identity differs from the claimed sender.
+fn verify_sender(
+    msg_sender: &mesh_core::identity::Identity,
+    peer_identity: &Option<mesh_core::identity::Identity>,
+) -> bool {
+    match peer_identity {
+        Some(peer_id) => {
+            if msg_sender != peer_id {
+                error!(
+                    "sender identity mismatch: message claims {} but TLS cert is {}",
+                    msg_sender.did(),
+                    peer_id.did()
+                );
+                return false;
+            }
+            true
+        }
+        None => true, // No peer cert available (e.g., no mutual TLS) — allow
+    }
+}
+
 /// Handle an incoming request frame, dispatching to the appropriate DhtNode handler.
 async fn dispatch_request(
     dht: &Arc<Mutex<DhtNode>>,
     frame: Frame,
     sender: mesh_transport::ResponseSender,
-    peer_addr: SocketAddr,
+    peer_identity: Option<mesh_core::identity::Identity>,
 ) {
     let response = {
         let mut node = dht.lock().await;
         match frame.msg_type {
             MSG_PING => match from_cbor::<Ping>(&frame.body) {
                 Ok(ping) => {
-                    let pong = node.handle_ping(&ping);
-                    let body = to_cbor(&pong).expect("cbor encode pong");
-                    Some(Frame::response(&frame, MSG_PONG, body))
+                    if !verify_sender(&ping.sender, &peer_identity) {
+                        None
+                    } else {
+                        let pong = node.handle_ping(&ping);
+                        let body = to_cbor(&pong).expect("cbor encode pong");
+                        Some(Frame::response(&frame, MSG_PONG, body))
+                    }
                 }
                 Err(e) => {
-                    error!("bad PING from {peer_addr}: {e}");
+                    error!("bad PING: {e}");
                     None
                 }
             },
             MSG_STORE => match from_cbor::<Store>(&frame.body) {
                 Ok(store_req) => {
-                    let ack = node.handle_store(&store_req);
-                    let body = to_cbor(&ack).expect("cbor encode store_ack");
-                    Some(Frame::response(&frame, MSG_STORE_ACK, body))
+                    if !verify_sender(&store_req.sender, &peer_identity) {
+                        None
+                    } else {
+                        let ack = node.handle_store(&store_req);
+                        let body = to_cbor(&ack).expect("cbor encode store_ack");
+                        Some(Frame::response(&frame, MSG_STORE_ACK, body))
+                    }
                 }
                 Err(e) => {
-                    error!("bad STORE from {peer_addr}: {e}");
+                    error!("bad STORE: {e}");
                     None
                 }
             },
             MSG_FIND_NODE => match from_cbor::<FindNode>(&frame.body) {
                 Ok(find_node) => {
-                    let result = node.handle_find_node(&find_node);
-                    let body = to_cbor(&result).expect("cbor encode find_node_result");
-                    Some(Frame::response(&frame, MSG_FIND_NODE_RESULT, body))
+                    if !verify_sender(&find_node.sender, &peer_identity) {
+                        None
+                    } else {
+                        let result = node.handle_find_node(&find_node);
+                        let body = to_cbor(&result).expect("cbor encode find_node_result");
+                        Some(Frame::response(&frame, MSG_FIND_NODE_RESULT, body))
+                    }
                 }
                 Err(e) => {
-                    error!("bad FIND_NODE from {peer_addr}: {e}");
+                    error!("bad FIND_NODE: {e}");
                     None
                 }
             },
             MSG_FIND_VALUE => match from_cbor::<FindValue>(&frame.body) {
                 Ok(find_value) => {
-                    let result = node.handle_find_value(&find_value);
-                    let body = to_cbor(&result).expect("cbor encode find_value_result");
-                    Some(Frame::response(&frame, MSG_FIND_VALUE_RESULT, body))
+                    if !verify_sender(&find_value.sender, &peer_identity) {
+                        None
+                    } else {
+                        let result = node.handle_find_value(&find_value);
+                        let body = to_cbor(&result).expect("cbor encode find_value_result");
+                        Some(Frame::response(&frame, MSG_FIND_VALUE_RESULT, body))
+                    }
                 }
                 Err(e) => {
-                    error!("bad FIND_VALUE from {peer_addr}: {e}");
+                    error!("bad FIND_VALUE: {e}");
                     None
                 }
             },
             other => {
-                error!("unknown msg_type 0x{other:02x} from {peer_addr}");
+                error!("unknown msg_type 0x{other:02x}");
                 None
             }
         }
@@ -206,7 +262,7 @@ async fn dispatch_request(
     if let Some(resp) = response
         && let Err(e) = sender.send(&resp).await
     {
-        error!("failed to send response to {peer_addr}: {e}");
+        error!("failed to send response: {e}");
     }
 }
 
@@ -220,7 +276,7 @@ async fn cmd_start(
     let did = keypair.identity().did();
     let socket_addr = parse_addr(listen);
 
-    let endpoint = MeshEndpoint::new(socket_addr)?;
+    let endpoint = MeshEndpoint::new(socket_addr, &keypair)?;
     let local_addr = endpoint.local_addr()?;
     let node_addr = make_node_addr(&local_addr.to_string());
 
@@ -236,10 +292,10 @@ async fn cmd_start(
 
     // Bootstrap from seeds
     if !seeds.is_empty() {
-        let transport =
-            QuicTransport::new(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)))?;
-        let seed_addrs: Vec<NodeAddr> = seeds.iter().map(|s| make_node_addr(s)).collect();
         let mut node = dht.lock().await;
+        let transport =
+            QuicTransport::new(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)), node.keypair())?;
+        let seed_addrs: Vec<NodeAddr> = seeds.iter().map(|s| make_node_addr(s)).collect();
         match node.bootstrap(&seed_addrs, &transport).await {
             Ok(n) => println!("  Bootstrap: discovered {n} nodes"),
             Err(e) => eprintln!("  Bootstrap failed: {e}"),
@@ -249,18 +305,10 @@ async fn cmd_start(
     // Listen for incoming connections
     let dht_clone = dht.clone();
     endpoint
-        .listen(move |frame, sender| {
+        .listen(move |frame, sender, peer_identity| {
             let dht = dht_clone.clone();
             async move {
-                // We don't have the peer address readily available in the handler,
-                // so we use a placeholder for logging.
-                dispatch_request(
-                    &dht,
-                    frame,
-                    sender,
-                    SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)),
-                )
-                .await;
+                dispatch_request(&dht, frame, sender, peer_identity).await;
             }
         })
         .await?;
@@ -279,13 +327,28 @@ async fn cmd_publish(
     let keypair = load_or_generate_keypair(identity_path);
     let did = keypair.identity().did();
 
-    // Build capability payload as JSON
-    let payload = serde_json::json!({
-        "type": cap_type,
-        "endpoint": endpoint_addr,
-        "params": params.map(|p| serde_json::from_str::<serde_json::Value>(p).unwrap_or(serde_json::Value::String(p.to_string()))),
-    });
-    let payload_bytes = serde_json::to_vec(&payload)?;
+    // Build capability payload as deterministic CBOR (per Section 5.2)
+    let payload = {
+        let mut map = std::collections::BTreeMap::new();
+        map.insert(
+            "endpoint".to_string(),
+            ciborium::Value::Text(endpoint_addr.to_string()),
+        );
+        if let Some(p) = params {
+            map.insert("params".to_string(), ciborium::Value::Text(p.to_string()));
+        }
+        map.insert(
+            "type".to_string(),
+            ciborium::Value::Text(cap_type.to_string()),
+        );
+        ciborium::Value::Map(
+            map.into_iter()
+                .map(|(k, v)| (ciborium::Value::Text(k), v))
+                .collect(),
+        )
+    };
+    let mut payload_bytes = Vec::new();
+    ciborium::into_writer(&payload, &mut payload_bytes)?;
 
     // Compute routing keys (hierarchical)
     let rkeys = hierarchical_routing_keys(cap_type);
@@ -307,11 +370,13 @@ async fn cmd_publish(
     println!("  ID:     {}", descriptor.id);
 
     // Connect to seed and STORE
-    let transport = QuicTransport::new(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)))?;
+    let transport = QuicTransport::new(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)), &keypair)?;
+    let local_addr = transport.local_addr()?;
     let seed_addr = make_node_addr(seed);
 
     let store = Store {
         sender: keypair.identity(),
+        sender_addr: make_node_addr(&local_addr.to_string()),
         descriptor,
     };
     let body = to_cbor(&store).expect("cbor encode store");
@@ -339,6 +404,10 @@ async fn cmd_publish(
 }
 
 /// Discover capabilities on the mesh.
+///
+/// Bootstraps a DhtNode from the seed, then performs an iterative
+/// lookup_value — the proper Kademlia lookup instead of a single
+/// direct FIND_VALUE (review issue #1).
 async fn cmd_discover(
     cap_type: &str,
     seed: &str,
@@ -350,63 +419,47 @@ async fn cmd_discover(
     println!("Discovering: {cap_type}");
     println!("  Routing key: {rk}");
 
-    let transport = QuicTransport::new(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)))?;
+    let transport = QuicTransport::new(
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)),
+        &keypair,
+    )?;
+    let local_addr = transport.local_addr()?;
 
-    // First add seed to routing table so lookup_value can find it
+    let mut dht = DhtNode::new(
+        keypair,
+        make_node_addr(&local_addr.to_string()),
+        DhtConfig::default(),
+    );
+
+    // Bootstrap from seed
     let seed_addr = make_node_addr(seed);
+    match dht.bootstrap(&[seed_addr], &transport).await {
+        Ok(n) => println!("  Bootstrap: discovered {n} nodes"),
+        Err(e) => eprintln!("  Bootstrap failed: {e}"),
+    }
 
-    // Send a PING to get the seed's identity
-    let ping = Ping {
-        sender: keypair.identity(),
-        sender_addr: NodeAddr {
-            protocol: "quic".into(),
-            address: "0.0.0.0:0".into(),
-        },
-    };
-    let ping_body = to_cbor(&ping).expect("cbor encode ping");
-    let ping_frame = Frame::new(MSG_PING, ping_body);
-
-    let pong_frame =
-        mesh_dht::transport::Transport::send_request(&transport, &seed_addr, ping_frame)
-            .await
-            .map_err(|e| anyhow::anyhow!("transport error: {e}"))?;
-    let _pong: Pong = from_cbor(&pong_frame.body)?;
-
-    // Now do FIND_VALUE directly
-    let find_value = FindValue {
-        sender: keypair.identity(),
-        key: rk,
-        max_results: 20,
-        filters: None,
-    };
-    let body = to_cbor(&find_value).expect("cbor encode find_value");
-    let frame = Frame::new(MSG_FIND_VALUE, body);
-
-    let resp = mesh_dht::transport::Transport::send_request(&transport, &seed_addr, frame)
+    // Iterative lookup
+    let descriptors = dht
+        .lookup_value(&rk, &transport)
         .await
-        .map_err(|e| anyhow::anyhow!("transport error: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("lookup error: {e}"))?;
 
-    if resp.msg_type == MSG_FIND_VALUE_RESULT {
-        let result: FindValueResult = from_cbor(&resp.body)?;
-        if let Some(descriptors) = result.descriptors {
-            println!("  Found {} descriptor(s):", descriptors.len());
-            for desc in &descriptors {
-                println!("    ---");
-                println!("    Publisher: {}", desc.publisher.did());
-                println!("    Topic:     {}", desc.topic);
-                println!("    ID:        {}", desc.id);
-                // Try to parse payload as JSON for pretty printing
-                if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&desc.payload) {
-                    println!("    Payload:   {val}");
-                }
-            }
-        } else if let Some(nodes) = result.nodes {
-            println!("  No descriptors found; got {} closer node(s)", nodes.len());
-        } else {
-            println!("  Empty response");
-        }
+    if descriptors.is_empty() {
+        println!("  No descriptors found");
     } else {
-        println!("  Unexpected response type 0x{:02x}", resp.msg_type);
+        println!("  Found {} descriptor(s):", descriptors.len());
+        for desc in &descriptors {
+            println!("    ---");
+            println!("    Publisher: {}", desc.publisher.did());
+            println!("    Topic:     {}", desc.topic);
+            println!("    ID:        {}", desc.id);
+            // Try CBOR first, then JSON fallback for backwards compat
+            if let Ok(val) = ciborium::from_reader::<ciborium::Value, _>(&desc.payload[..]) {
+                println!("    Payload:   {val:?}");
+            } else if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&desc.payload) {
+                println!("    Payload:   {val}");
+            }
+        }
     }
 
     Ok(())
@@ -415,15 +468,16 @@ async fn cmd_discover(
 /// Ping a remote node.
 async fn cmd_ping(addr: &str, identity_path: Option<&PathBuf>) -> anyhow::Result<()> {
     let keypair = load_or_generate_keypair(identity_path);
-    let transport = QuicTransport::new(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)))?;
+    let transport = QuicTransport::new(
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0)),
+        &keypair,
+    )?;
+    let local_addr = transport.local_addr()?;
 
     let target_addr = make_node_addr(addr);
     let ping = Ping {
         sender: keypair.identity(),
-        sender_addr: NodeAddr {
-            protocol: "quic".into(),
-            address: "0.0.0.0:0".into(),
-        },
+        sender_addr: make_node_addr(&local_addr.to_string()),
     };
     let body = to_cbor(&ping).expect("cbor encode ping");
     let frame = Frame::new(MSG_PING, body);
@@ -460,10 +514,10 @@ fn cmd_identity(generate: bool, path: Option<&PathBuf>) {
             if let Some(parent) = p.parent() {
                 std::fs::create_dir_all(parent).expect("failed to create directory");
             }
-            std::fs::write(p, kp.secret_bytes()).expect("failed to write key file");
+            write_secret_file(p, &kp.secret_bytes());
             println!("  Saved to: {}", p.display());
         } else {
-            println!("  Secret (hex): {}", hex::encode(kp.secret_bytes()));
+            println!("  (use --path to save the key file)");
         }
     } else if let Some(p) = path {
         if p.exists() {

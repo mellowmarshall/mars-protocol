@@ -4,6 +4,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use mesh_core::Frame;
 use mesh_core::frame::{MSG_PING, MSG_PONG, MSG_STORE, MSG_STORE_ACK};
+use mesh_core::identity::Keypair;
 
 use crate::connection::{recv_frame, send_frame, send_request};
 use crate::endpoint::MeshEndpoint;
@@ -14,16 +15,30 @@ fn localhost() -> SocketAddr {
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
 }
 
+/// Helper: create an endpoint with a fresh keypair.
+fn make_endpoint() -> MeshEndpoint {
+    let kp = Keypair::generate();
+    MeshEndpoint::new(localhost(), &kp).unwrap()
+}
+
 #[test]
 fn tls_self_signed_cert_generation() {
-    let (certs, _key) = tls::generate_self_signed_cert().unwrap();
+    let kp = Keypair::generate();
+    let (certs, _key) = tls::generate_self_signed_cert(&kp).unwrap();
     assert_eq!(certs.len(), 1);
     assert!(!certs[0].is_empty());
+
+    // Verify the cert contains the same Ed25519 public key
+    let extracted = tls::extract_ed25519_pubkey_from_cert_der(certs[0].as_ref());
+    assert!(extracted.is_some());
+    let identity = tls::identity_from_cert_der(certs[0].as_ref()).unwrap();
+    assert_eq!(identity, kp.identity());
 }
 
 #[test]
 fn tls_server_crypto_config() {
-    let (certs, key) = tls::generate_self_signed_cert().unwrap();
+    let kp = Keypair::generate();
+    let (certs, key) = tls::generate_self_signed_cert(&kp).unwrap();
     let config = tls::server_crypto_config(certs, key).unwrap();
     assert_eq!(config.alpn_protocols, vec![tls::MESH_ALPN.to_vec()]);
 }
@@ -36,7 +51,7 @@ fn tls_client_crypto_config() {
 
 #[tokio::test]
 async fn endpoint_creation() {
-    let ep = MeshEndpoint::new(localhost()).unwrap();
+    let ep = make_endpoint();
     let addr = ep.local_addr().unwrap();
     assert!(addr.port() > 0);
     ep.close();
@@ -44,12 +59,12 @@ async fn endpoint_creation() {
 
 #[tokio::test]
 async fn connect_and_ping_pong() {
-    let server_ep = MeshEndpoint::new(localhost()).unwrap();
+    let server_ep = make_endpoint();
     let server_addr = server_ep.local_addr().unwrap();
 
     let server_handle = tokio::spawn(async move {
         server_ep
-            .listen(|frame, sender| async move {
+            .listen(|frame, sender, _peer_identity| async move {
                 assert_eq!(frame.msg_type, MSG_PING);
                 let response = Frame::response(&frame, MSG_PONG, b"pong-body".to_vec());
                 sender.send(&response).await.unwrap();
@@ -58,7 +73,7 @@ async fn connect_and_ping_pong() {
             .unwrap();
     });
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint();
     let conn = client_ep.connect(server_addr).await.unwrap();
 
     let ping = Frame::new(MSG_PING, b"ping-body".to_vec());
@@ -75,12 +90,12 @@ async fn connect_and_ping_pong() {
 
 #[tokio::test]
 async fn frame_roundtrip_over_quic() {
-    let server_ep = MeshEndpoint::new(localhost()).unwrap();
+    let server_ep = make_endpoint();
     let server_addr = server_ep.local_addr().unwrap();
 
     let server_handle = tokio::spawn(async move {
         server_ep
-            .listen(|frame, sender| async move {
+            .listen(|frame, sender, _peer_identity| async move {
                 let response = Frame::response(&frame, frame.msg_type | 0x80, frame.body.clone());
                 sender.send(&response).await.unwrap();
             })
@@ -88,7 +103,7 @@ async fn frame_roundtrip_over_quic() {
             .unwrap();
     });
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint();
     let conn = client_ep.connect(server_addr).await.unwrap();
 
     // Test with various body sizes.
@@ -108,12 +123,12 @@ async fn frame_roundtrip_over_quic() {
 
 #[tokio::test]
 async fn multiple_concurrent_streams() {
-    let server_ep = MeshEndpoint::new(localhost()).unwrap();
+    let server_ep = make_endpoint();
     let server_addr = server_ep.local_addr().unwrap();
 
     let server_handle = tokio::spawn(async move {
         server_ep
-            .listen(|frame, sender| async move {
+            .listen(|frame, sender, _peer_identity| async move {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 let response = Frame::response(&frame, MSG_PONG, frame.body.clone());
                 sender.send(&response).await.unwrap();
@@ -122,7 +137,7 @@ async fn multiple_concurrent_streams() {
             .unwrap();
     });
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint();
     let conn = client_ep.connect(server_addr).await.unwrap();
 
     let mut handles = Vec::new();
@@ -149,7 +164,7 @@ async fn multiple_concurrent_streams() {
 #[tokio::test]
 async fn raw_stream_send_recv() {
     // Test the lower-level send_frame / recv_frame API directly.
-    let server_ep = MeshEndpoint::new(localhost()).unwrap();
+    let server_ep = make_endpoint();
     let server_addr = server_ep.local_addr().unwrap();
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
@@ -168,7 +183,7 @@ async fn raw_stream_send_recv() {
         }
     });
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint();
     let conn = client_ep.connect(server_addr).await.unwrap();
     let (mut send, mut recv) = conn.open_stream().await.unwrap();
 
@@ -188,12 +203,12 @@ async fn raw_stream_send_recv() {
 
 #[tokio::test]
 async fn connection_reuse() {
-    let server_ep = MeshEndpoint::new(localhost()).unwrap();
+    let server_ep = make_endpoint();
     let server_addr = server_ep.local_addr().unwrap();
 
     let server_handle = tokio::spawn(async move {
         server_ep
-            .listen(|frame, sender| async move {
+            .listen(|frame, sender, _peer_identity| async move {
                 let response = Frame::response(&frame, MSG_PONG, frame.body.clone());
                 sender.send(&response).await.unwrap();
             })
@@ -201,7 +216,7 @@ async fn connection_reuse() {
             .unwrap();
     });
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint();
     let conn = client_ep.connect(server_addr).await.unwrap();
 
     // Send 20 sequential requests on the same connection.
@@ -220,12 +235,12 @@ async fn connection_reuse() {
 #[tokio::test]
 async fn request_response_api() {
     // Test the accept_request / ResponseSender API explicitly.
-    let server_ep = MeshEndpoint::new(localhost()).unwrap();
+    let server_ep = make_endpoint();
     let server_addr = server_ep.local_addr().unwrap();
 
     let server_handle = tokio::spawn(async move {
         server_ep
-            .listen(|frame, sender| async move {
+            .listen(|frame, sender, _peer_identity| async move {
                 // Verify it's a well-formed frame.
                 assert_eq!(frame.magic, mesh_core::frame::FRAME_MAGIC);
                 assert_eq!(frame.version, mesh_core::frame::PROTOCOL_VERSION);
@@ -240,7 +255,7 @@ async fn request_response_api() {
             .unwrap();
     });
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint();
     let conn = client_ep.connect(server_addr).await.unwrap();
 
     let request = Frame::new(MSG_STORE, b"test-data".to_vec());

@@ -3,6 +3,8 @@
 //! `DhtNode` is the main entry point for DHT operations: handling incoming
 //! protocol messages and performing iterative lookups.
 
+use std::sync::Arc;
+
 use mesh_core::frame::{
     MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT,
 };
@@ -14,8 +16,9 @@ use mesh_core::message::{
 use mesh_core::{Descriptor, Frame, Hash};
 
 use crate::distance::distance_cmp;
+use crate::hooks::ProtocolHook;
 use crate::routing::{K, RoutingTable};
-use crate::storage::DescriptorStore;
+use crate::storage::{DescriptorStorage, DescriptorStore};
 use crate::transport::{Transport, TransportError};
 
 /// Configuration for a DHT node.
@@ -38,7 +41,10 @@ impl Default for DhtConfig {
 }
 
 /// A DHT node: identity, routing table, descriptor storage, and config.
-pub struct DhtNode {
+///
+/// Generic over `S: DescriptorStorage` to allow pluggable storage backends.
+/// Defaults to the in-memory [`DescriptorStore`].
+pub struct DhtNode<S: DescriptorStorage = DescriptorStore> {
     /// This node's keypair.
     keypair: Keypair,
     /// This node's public identity.
@@ -50,14 +56,23 @@ pub struct DhtNode {
     /// Kademlia routing table.
     pub routing_table: RoutingTable,
     /// Descriptor storage.
-    pub store: DescriptorStore,
+    pub store: S,
     /// Configuration.
     pub config: DhtConfig,
+    /// Optional protocol hooks for metering, access control, and auditing.
+    hooks: Option<Arc<dyn ProtocolHook>>,
 }
 
 impl DhtNode {
-    /// Create a new DHT node.
+    /// Create a new DHT node with the default in-memory storage backend.
     pub fn new(keypair: Keypair, addr: NodeAddr, config: DhtConfig) -> Self {
+        Self::with_store(keypair, addr, config, DescriptorStore::new())
+    }
+}
+
+impl<S: DescriptorStorage> DhtNode<S> {
+    /// Create a new DHT node with a custom storage backend.
+    pub fn with_store(keypair: Keypair, addr: NodeAddr, config: DhtConfig, store: S) -> Self {
         let identity = keypair.identity();
         let node_id = identity.node_id();
         let routing_table = RoutingTable::new(node_id.clone());
@@ -67,9 +82,16 @@ impl DhtNode {
             node_id,
             addr,
             routing_table,
-            store: DescriptorStore::new(),
+            store,
             config,
+            hooks: None,
         }
+    }
+
+    /// Attach protocol hooks for metering, access control, or auditing.
+    pub fn with_hooks(mut self, hooks: Arc<dyn ProtocolHook>) -> Self {
+        self.hooks = Some(hooks);
+        self
     }
 
     /// Get this node's keypair.
@@ -109,17 +131,33 @@ impl DhtNode {
     }
 
     /// Handle a STORE request (Section 3.5).
+    ///
+    /// If protocol hooks are installed, calls `pre_store` before storing and
+    /// `post_store` after a successful store.
     pub fn handle_store(&mut self, store_req: &Store) -> StoreAck {
-        // Update routing table with sender
-        // Note: we don't have the sender's addr in the Store message,
-        // but we update if they're already known
-        self.touch_sender(&store_req.sender);
+        self.update_routing_table(&store_req.sender, &store_req.sender_addr);
+
+        // Pre-store hook
+        if let Some(ref hooks) = self.hooks {
+            if let Err(reason) = hooks.pre_store(&store_req.descriptor) {
+                return StoreAck {
+                    stored: false,
+                    reason: Some(reason),
+                };
+            }
+        }
 
         match self.store.store_descriptor(store_req.descriptor.clone()) {
-            Ok(()) => StoreAck {
-                stored: true,
-                reason: None,
-            },
+            Ok(()) => {
+                // Post-store hook
+                if let Some(ref hooks) = self.hooks {
+                    hooks.post_store(&store_req.descriptor);
+                }
+                StoreAck {
+                    stored: true,
+                    reason: None,
+                }
+            }
             Err(e) => StoreAck {
                 stored: false,
                 reason: Some(e.to_string()),
@@ -128,21 +166,50 @@ impl DhtNode {
     }
 
     /// Handle a FIND_NODE request (Section 3.6).
+    ///
+    /// Returns up to K closest nodes to the target, including ourselves
+    /// so that a bootstrapping peer can learn our identity.
     pub fn handle_find_node(&mut self, find_node: &FindNode) -> FindNodeResult {
-        self.touch_sender(&find_node.sender);
+        self.update_routing_table(&find_node.sender, &find_node.sender_addr);
 
-        let nodes = self.routing_table.closest_nodes(&find_node.target, K);
+        let mut nodes = self.routing_table.closest_nodes(&find_node.target, K);
+
+        // Include ourselves in the result so the requester can add us to
+        // their routing table (fixes bootstrap with a single seed).
+        let self_info = NodeInfo {
+            identity: self.identity.clone(),
+            addr: self.addr.clone(),
+            last_seen: Self::now_micros(),
+        };
+        // Only add self if not already present and we'd fit within K.
+        if !nodes.iter().any(|n| n.identity == self.identity) && nodes.len() < K {
+            nodes.push(self_info);
+        }
+
         FindNodeResult { nodes }
     }
 
     /// Handle a FIND_VALUE request (Section 3.7).
+    ///
+    /// If protocol hooks are installed, calls `pre_query` before lookup and
+    /// `post_query` after results are produced.
     pub fn handle_find_value(&mut self, find_value: &FindValue) -> FindValueResult {
-        self.touch_sender(&find_value.sender);
+        self.update_routing_table(&find_value.sender, &find_value.sender_addr);
+
+        // Pre-query hook
+        if let Some(ref hooks) = self.hooks {
+            if let Err(_) = hooks.pre_query(&find_value.key) {
+                return FindValueResult {
+                    descriptors: None,
+                    nodes: None,
+                };
+            }
+        }
 
         let filters = find_value.filters.as_ref();
         let descriptors = self.store.get_descriptors(&find_value.key, filters);
 
-        if descriptors.is_empty() {
+        let result = if descriptors.is_empty() {
             // No descriptors — return closest nodes instead
             let nodes = self.routing_table.closest_nodes(&find_value.key, K);
             FindValueResult {
@@ -150,8 +217,8 @@ impl DhtNode {
                 nodes: Some(nodes),
             }
         } else {
-            // Return descriptors, capped at max_results
-            let max = find_value.max_results as usize;
+            // Return descriptors, capped at server-side policy (clamp attacker-supplied value)
+            let max = (find_value.max_results as usize).min(self.config.max_find_value_results as usize);
             let truncated = if descriptors.len() > max {
                 descriptors[..max].to_vec()
             } else {
@@ -161,7 +228,15 @@ impl DhtNode {
                 descriptors: Some(truncated),
                 nodes: None,
             }
+        };
+
+        // Post-query hook
+        if let Some(ref hooks) = self.hooks {
+            let count = result.descriptors.as_ref().map_or(0, |d| d.len());
+            hooks.post_query(&find_value.key, count);
         }
+
+        result
     }
 
     /// Perform an iterative Kademlia lookup for descriptors at a target key.
@@ -206,6 +281,7 @@ impl DhtNode {
                 // Build FIND_VALUE request
                 let find_value = FindValue {
                     sender: self.identity.clone(),
+                    sender_addr: self.addr.clone(),
                     key: target_key.clone(),
                     max_results: self.config.max_find_value_results,
                     filters: None,
@@ -275,6 +351,7 @@ impl DhtNode {
             // Send FIND_NODE for our own ID
             let find_node = FindNode {
                 sender: self.identity.clone(),
+                sender_addr: self.addr.clone(),
                 target: self.node_id.clone(),
             };
             let body =
@@ -302,13 +379,16 @@ impl DhtNode {
         Ok(discovered)
     }
 
-    /// Update last-seen for a known sender (if they're in the routing table).
-    fn touch_sender(&mut self, sender: &Identity) {
-        let node_id = sender.node_id();
-        // We don't have the sender's addr from every message type,
-        // so we just do a lightweight update if they're already known.
-        // The real routing table update happens when we have full NodeInfo.
-        let _ = node_id; // Acknowledged — full touch requires addr
+    /// Add or update a sender in the routing table using their identity and address.
+    ///
+    /// All request messages now carry `sender_addr`, so every incoming message
+    /// contributes to routing table freshness — standard Kademlia behavior.
+    fn update_routing_table(&mut self, sender: &Identity, sender_addr: &NodeAddr) {
+        self.routing_table.add_node(NodeInfo {
+            identity: sender.clone(),
+            addr: sender_addr.clone(),
+            last_seen: Self::now_micros(),
+        });
     }
 
     fn now_micros() -> u64 {
@@ -449,6 +529,10 @@ mod tests {
 
         let store = Store {
             sender: kp.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "10.0.0.99:4433".into(),
+            },
             descriptor: desc,
         };
 
@@ -478,6 +562,10 @@ mod tests {
 
         let store = Store {
             sender: kp.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "10.0.0.99:4433".into(),
+            },
             descriptor: desc,
         };
 
@@ -506,11 +594,16 @@ mod tests {
         let sender = Keypair::generate();
         let find = FindNode {
             sender: sender.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "10.0.0.99:4433".into(),
+            },
             target: Hash::blake3(b"some target"),
         };
 
         let result = node.handle_find_node(&find);
-        assert_eq!(result.nodes.len(), 5);
+        // 5 pre-added + sender (via update_routing_table) + self = 7
+        assert_eq!(result.nodes.len(), 7);
     }
 
     #[test]
@@ -537,6 +630,10 @@ mod tests {
         let sender = Keypair::generate();
         let find = FindValue {
             sender: sender.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "10.0.0.99:4433".into(),
+            },
             key: rk,
             max_results: 20,
             filters: None,
@@ -568,6 +665,10 @@ mod tests {
         let sender = Keypair::generate();
         let find = FindValue {
             sender: sender.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "10.0.0.99:4433".into(),
+            },
             key: routing_key("nonexistent"),
             max_results: 20,
             filters: None,
@@ -576,7 +677,8 @@ mod tests {
         let result = node.handle_find_value(&find);
         assert!(result.descriptors.is_none());
         assert!(result.nodes.is_some());
-        assert_eq!(result.nodes.unwrap().len(), 3);
+        // 3 pre-added + sender (via update_routing_table) = 4
+        assert_eq!(result.nodes.unwrap().len(), 4);
     }
 
     #[test]
@@ -605,6 +707,10 @@ mod tests {
         let sender = Keypair::generate();
         let find = FindValue {
             sender: sender.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "10.0.0.99:4433".into(),
+            },
             key: rk,
             max_results: 20,
             filters: Some(FilterSet {

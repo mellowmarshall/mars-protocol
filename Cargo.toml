@@ -4,6 +4,8 @@ members = [
     "mesh-core",
     "mesh-transport",
     "mesh-dht",
+    "mesh-schemas",
+    "mesh-client",
     "mesh-node",
 ]
 

@@ -57,6 +57,8 @@ pub struct Ping {
 pub struct Store {
     /// Sender's identity.
     pub sender: Identity,
+    /// Sender's QUIC endpoint.
+    pub sender_addr: NodeAddr,
     /// The descriptor to store.
     pub descriptor: Descriptor,
 }
@@ -66,6 +68,8 @@ pub struct Store {
 pub struct FindNode {
     /// Sender's identity.
     pub sender: Identity,
+    /// Sender's QUIC endpoint.
+    pub sender_addr: NodeAddr,
     /// The DHT key to find nodes near.
     pub target: Hash,
 }
@@ -75,6 +79,8 @@ pub struct FindNode {
 pub struct FindValue {
     /// Sender's identity.
     pub sender: Identity,
+    /// Sender's QUIC endpoint.
+    pub sender_addr: NodeAddr,
     /// The routing key to search for.
     pub key: Hash,
     /// Max descriptors to return (default 20).
@@ -207,6 +213,10 @@ mod tests {
         let kp = Keypair::generate();
         let msg = FindNode {
             sender: kp.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "127.0.0.1:4433".into(),
+            },
             target: Hash::blake3(b"target key"),
         };
         let bytes = to_cbor(&msg).unwrap();
@@ -219,6 +229,10 @@ mod tests {
         let kp = Keypair::generate();
         let msg = FindValue {
             sender: kp.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "127.0.0.1:4433".into(),
+            },
             key: Hash::blake3(b"routing key"),
             max_results: 10,
             filters: Some(FilterSet {
@@ -293,6 +307,10 @@ mod tests {
         let kp = Keypair::generate();
         let msg = FindValue {
             sender: kp.identity(),
+            sender_addr: NodeAddr {
+                protocol: "quic".into(),
+                address: "127.0.0.1:4433".into(),
+            },
             key: Hash::blake3(b"test"),
             max_results: 20,
             filters: None,

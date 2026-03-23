@@ -601,6 +601,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
+name = "mesh-client"
+version = "0.1.0"
+dependencies = [
+ "mesh-core",
+ "mesh-dht",
+ "mesh-transport",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mesh-core"
 version = "0.1.0"
 dependencies = [
@@ -633,6 +645,7 @@ name = "mesh-node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "ciborium",
  "clap",
  "hex",
  "mesh-core",
@@ -643,6 +656,13 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "mesh-schemas"
+version = "0.1.0"
+dependencies = [
+ "mesh-core",
 ]
 
 [[package]]

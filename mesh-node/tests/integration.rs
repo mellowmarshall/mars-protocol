@@ -27,6 +27,11 @@ fn localhost() -> SocketAddr {
     SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
 }
 
+/// Helper: create an endpoint with a given keypair.
+fn make_endpoint(kp: &Keypair) -> MeshEndpoint {
+    MeshEndpoint::new(localhost(), kp).unwrap()
+}
+
 fn now_micros() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
@@ -60,7 +65,7 @@ fn start_node(
     let dht_clone = dht.clone();
     let handle = tokio::spawn(async move {
         endpoint
-            .listen(move |frame, sender| {
+            .listen(move |frame, sender, _peer_identity| {
                 let dht = dht_clone.clone();
                 async move {
                     let response = {
@@ -114,8 +119,8 @@ async fn end_to_end_publish_and_discover() {
     let kp_b_secret = Keypair::generate().secret_bytes();
     let kp_b = Keypair::from_bytes(&kp_b_secret);
 
-    let ep_a = MeshEndpoint::new(localhost()).unwrap();
-    let ep_b = MeshEndpoint::new(localhost()).unwrap();
+    let ep_a = make_endpoint(&Keypair::from_bytes(&kp_a_secret));
+    let ep_b = make_endpoint(&Keypair::from_bytes(&kp_b_secret));
 
     let addr_a = ep_a.local_addr().unwrap();
     let _addr_b = ep_b.local_addr().unwrap();
@@ -152,6 +157,7 @@ async fn end_to_end_publish_and_discover() {
         let mut node_a = dht_a.lock().await;
         let store = Store {
             sender: kp_a.identity(),
+            sender_addr: make_node_addr(&addr_a.to_string()),
             descriptor,
         };
         let ack = node_a.handle_store(&store);
@@ -161,11 +167,12 @@ async fn end_to_end_publish_and_discover() {
     // ── Step 2: Node B discovers it via FIND_VALUE over QUIC ──
 
     // Node B connects to Node A and sends FIND_VALUE
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint(&kp_b);
     let conn_to_a = client_ep.connect(addr_a).await.unwrap();
 
     let find_value = FindValue {
         sender: kp_b.identity(),
+        sender_addr: make_node_addr(&client_ep.local_addr().unwrap().to_string()),
         key: rk.clone(),
         max_results: 20,
         filters: None,
@@ -219,13 +226,13 @@ async fn end_to_end_publish_and_discover() {
 async fn ping_pong_over_quic() {
     let kp_secret = Keypair::generate().secret_bytes();
     let kp = Keypair::from_bytes(&kp_secret);
-    let ep = MeshEndpoint::new(localhost()).unwrap();
+    let ep = make_endpoint(&Keypair::from_bytes(&kp_secret));
     let addr = ep.local_addr().unwrap();
     let (_dht, handle) = start_node(Keypair::from_bytes(&kp_secret), ep);
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_ep = make_endpoint(&Keypair::generate());
     let conn = client_ep.connect(addr).await.unwrap();
 
     let ping = Ping {
@@ -251,13 +258,14 @@ async fn ping_pong_over_quic() {
 async fn store_and_find_value_over_quic() {
     let kp_server_secret = Keypair::generate().secret_bytes();
     let _kp_server = Keypair::from_bytes(&kp_server_secret);
-    let ep = MeshEndpoint::new(localhost()).unwrap();
+    let ep = make_endpoint(&Keypair::from_bytes(&kp_server_secret));
     let addr = ep.local_addr().unwrap();
     let (_dht, handle) = start_node(Keypair::from_bytes(&kp_server_secret), ep);
 
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let client_ep = MeshEndpoint::new(localhost()).unwrap();
+    let client_kp = Keypair::generate();
+    let client_ep = make_endpoint(&client_kp);
     let conn = client_ep.connect(addr).await.unwrap();
 
     // Store a descriptor
@@ -279,6 +287,7 @@ async fn store_and_find_value_over_quic() {
 
     let store = Store {
         sender: publisher_kp.identity(),
+        sender_addr: make_node_addr(&client_ep.local_addr().unwrap().to_string()),
         descriptor: desc.clone(),
     };
     let store_body = to_cbor(&store).unwrap();
@@ -293,7 +302,8 @@ async fn store_and_find_value_over_quic() {
 
     // Find it
     let find = FindValue {
-        sender: Keypair::generate().identity(),
+        sender: client_kp.identity(),
+        sender_addr: make_node_addr(&client_ep.local_addr().unwrap().to_string()),
         key: rk,
         max_results: 20,
         filters: None,

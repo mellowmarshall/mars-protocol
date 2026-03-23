@@ -732,7 +732,7 @@ mod test_vectors {
         let publisher = kp.identity();
 
         let schema_hash = Hash::blake3(b"mesh:schema:core/capability");
-        let routing_key = Hash::blake3(b"mesh:routing:compute/inference/text-generation");
+        let routing_key = Hash::blake3(b"mesh:route:compute/inference/text-generation");
 
         let payload = b"test payload".to_vec();
         let topic = "test-topic".to_string();
@@ -809,11 +809,11 @@ mod test_vectors {
         // the PROTOCOL.md appendix MUST be updated to match.
         assert_eq!(
             cbor_hex,
-            "a8677061796c6f61644c74657374207061796c6f6164697075626c6973686572820158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c6c726f7574696e675f6b6579738182035820eea1159ae33052b4a1c6e6cd41b1c923642fd9879aebb2b875458d785b9ae4f56b736368656d615f6861736882035820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3306873657175656e6365016974696d657374616d701b00060a24181e400065746f7069636a746573742d746f7069636374746c190e10",
+            "a8677061796c6f61644c74657374207061796c6f6164697075626c6973686572820158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c6c726f7574696e675f6b6579738182035820235ad34c1ac90b981ab12865b8d4d5d4d18708fc614cec7fd1d01fad82c6b69a6b736368656d615f6861736882035820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3306873657175656e6365016974696d657374616d701b00060a24181e400065746f7069636a746573742d746f7069636374746c190e10",
             "CBOR hex mismatch — canonical serialization has changed!"
         );
         assert_eq!(
-            id_hex, "321631d68f034cbdb122eaaaefe9216370f28020900239dfcdbefa66c14df507",
+            id_hex, "a38b23b474083f46592c4584728addb830f35e98434a0010d3d0b4e63c2f0581",
             "BLAKE3 descriptor ID mismatch — canonical serialization has changed!"
         );
 
