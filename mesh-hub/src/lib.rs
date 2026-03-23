@@ -1,0 +1,265 @@
+//! `mesh-hub` — high-capacity mesh node with disk-backed storage, multi-tenant
+//! management, and admin API.
+//!
+//! A hub is a mesh node that speaks the same protocol as any node but operates
+//! at a higher tier: disk-backed storage, full routing tables, multi-tenant
+//! commercial service, and an admin API.
+
+pub mod admin;
+pub mod config;
+pub mod hooks;
+pub mod policy;
+pub mod storage;
+pub mod tenant;
+
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use mesh_core::frame::{
+    MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT, MSG_PING, MSG_PONG,
+    MSG_STORE, MSG_STORE_ACK,
+};
+use mesh_core::identity::{Identity, Keypair};
+use mesh_core::message::{FindNode, FindValue, NodeAddr, Ping, Store, from_cbor, to_cbor};
+use mesh_core::Frame;
+use mesh_dht::{DescriptorStorage, DhtConfig, DhtNode};
+use mesh_transport::connection::ResponseSender;
+use mesh_transport::endpoint::MeshEndpoint;
+
+use crate::admin::{AdminState, admin_router};
+use crate::config::HubConfig;
+use crate::hooks::HubProtocolHook;
+use crate::policy::PolicyEngine;
+use crate::storage::CachedStorage;
+use crate::storage::redb::RedbStorage;
+use crate::tenant::TenantManager;
+
+/// Type alias for the hub's DhtNode with disk-backed cached storage.
+pub type HubDhtNode = DhtNode<CachedStorage<RedbStorage>>;
+
+/// The core hub runtime — owns all hub state and runs the event loops.
+pub struct HubRuntime {
+    config: HubConfig,
+    hub_identity: Identity,
+    dht_node: Arc<Mutex<HubDhtNode>>,
+    endpoint: MeshEndpoint,
+    tenant_manager: Arc<Mutex<TenantManager>>,
+}
+
+impl HubRuntime {
+    /// Create a builder for configuring the hub.
+    pub fn builder(config: HubConfig, keypair: Keypair) -> HubBuilder {
+        HubBuilder { config, keypair }
+    }
+
+    /// The hub's admin API router. Downstream projects can merge additional routes.
+    pub fn admin_router(&self) -> axum::Router {
+        let state = Arc::new(AdminState {
+            dht_node: self.dht_node.clone(),
+            tenant_manager: self.tenant_manager.clone(),
+            start_time: std::time::Instant::now(),
+        });
+        admin_router(state)
+    }
+
+    /// Start the hub: admin API, expiry task, and protocol listener.
+    pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
+        let admin_addr = self.config.network.admin_addr;
+        let admin_state = Arc::new(AdminState {
+            dht_node: self.dht_node.clone(),
+            tenant_manager: self.tenant_manager.clone(),
+            start_time: std::time::Instant::now(),
+        });
+        let router = admin_router(admin_state);
+
+        // Spawn admin API server
+        let listener = tokio::net::TcpListener::bind(admin_addr).await?;
+        tracing::info!(%admin_addr, "admin API listening");
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, router).await {
+                tracing::error!("admin API error: {e}");
+            }
+        });
+
+        // Spawn expiry background task (every 60s)
+        let node_for_expiry = self.dht_node.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+                if let Ok(mut node) = node_for_expiry.lock() {
+                    node.store.evict_expired();
+                    tracing::debug!("expired descriptors evicted");
+                }
+            }
+        });
+
+        tracing::info!(
+            did = %self.hub_identity.did(),
+            addr = %self.config.network.listen_addr,
+            "mesh hub started"
+        );
+
+        // Protocol listener
+        let dht_node = self.dht_node.clone();
+        let listen_future = self.endpoint.listen(move |frame, sender, peer_identity| {
+            let dht_node = dht_node.clone();
+            async move {
+                handle_protocol_request(frame, sender, peer_identity, dht_node).await;
+            }
+        });
+
+        // Run until shutdown signal
+        tokio::select! {
+            result = listen_future => {
+                if let Err(e) = result {
+                    tracing::error!("listener error: {e}");
+                }
+            }
+            _ = tokio::signal::ctrl_c() => {
+                tracing::info!("shutdown signal received");
+            }
+        }
+
+        // Graceful shutdown
+        self.endpoint.close();
+        self.endpoint.wait_idle().await;
+        tracing::info!("hub shutdown complete");
+
+        Ok(())
+    }
+}
+
+/// Builder for configuring and constructing a [`HubRuntime`].
+pub struct HubBuilder {
+    config: HubConfig,
+    keypair: Keypair,
+}
+
+impl HubBuilder {
+    /// Build the hub runtime.
+    pub fn build(self) -> Result<HubRuntime, Box<dyn std::error::Error>> {
+        // Ensure data directories exist
+        std::fs::create_dir_all(&self.config.storage.data_dir)?;
+        if let Some(parent) = self.config.tenants.db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // L2: redb storage
+        let redb_path = self.config.storage.data_dir.join("descriptors.redb");
+        let redb_storage = RedbStorage::open(&redb_path)?;
+
+        // L1: hot cache wrapping L2
+        let cached_storage =
+            CachedStorage::new(redb_storage, self.config.storage.hot_cache_entries);
+
+        // L3: tenant database
+        let tenant_manager = Arc::new(Mutex::new(TenantManager::open(
+            &self.config.tenants.db_path,
+        )?));
+
+        // Policy engine + protocol hook
+        let policy = PolicyEngine::new(self.config.policy.clone());
+        let hook = Arc::new(HubProtocolHook::new(policy, tenant_manager.clone()));
+
+        // QUIC endpoint (before moving keypair)
+        let listen_addr = self.config.network.listen_addr;
+        let endpoint = MeshEndpoint::new(listen_addr, &self.keypair)?;
+
+        // DhtNode with cached storage + hook
+        let hub_identity = self.keypair.identity();
+        let node_addr = NodeAddr {
+            protocol: "quic".into(),
+            address: listen_addr.to_string(),
+        };
+        let dht_node =
+            DhtNode::with_store(self.keypair, node_addr, DhtConfig::default(), cached_storage)
+                .with_hooks(hook);
+        let dht_node = Arc::new(Mutex::new(dht_node));
+
+        Ok(HubRuntime {
+            config: self.config,
+            hub_identity,
+            dht_node,
+            endpoint,
+            tenant_manager,
+        })
+    }
+}
+
+async fn handle_protocol_request(
+    frame: Frame,
+    sender: ResponseSender,
+    peer_identity: Option<Identity>,
+    dht_node: Arc<Mutex<HubDhtNode>>,
+) {
+    let response = {
+        let mut node = dht_node.lock().unwrap();
+
+        match frame.msg_type {
+            MSG_PING => {
+                let Ok(ping) = from_cbor::<Ping>(&frame.body) else {
+                    return;
+                };
+                if let Some(ref peer) = peer_identity {
+                    if &ping.sender != peer {
+                        tracing::warn!("sender identity mismatch in PING");
+                        return;
+                    }
+                }
+                let pong = node.handle_ping(&ping);
+                let body = to_cbor(&pong).unwrap();
+                Frame::response(&frame, MSG_PONG, body)
+            }
+            MSG_STORE => {
+                let Ok(store_req) = from_cbor::<Store>(&frame.body) else {
+                    return;
+                };
+                if let Some(ref peer) = peer_identity {
+                    if &store_req.sender != peer {
+                        tracing::warn!("sender identity mismatch in STORE");
+                        return;
+                    }
+                }
+                let ack = node.handle_store(&store_req);
+                let body = to_cbor(&ack).unwrap();
+                Frame::response(&frame, MSG_STORE_ACK, body)
+            }
+            MSG_FIND_NODE => {
+                let Ok(find) = from_cbor::<FindNode>(&frame.body) else {
+                    return;
+                };
+                if let Some(ref peer) = peer_identity {
+                    if &find.sender != peer {
+                        tracing::warn!("sender identity mismatch in FIND_NODE");
+                        return;
+                    }
+                }
+                let result = node.handle_find_node(&find);
+                let body = to_cbor(&result).unwrap();
+                Frame::response(&frame, MSG_FIND_NODE_RESULT, body)
+            }
+            MSG_FIND_VALUE => {
+                let Ok(find) = from_cbor::<FindValue>(&frame.body) else {
+                    return;
+                };
+                if let Some(ref peer) = peer_identity {
+                    if &find.sender != peer {
+                        tracing::warn!("sender identity mismatch in FIND_VALUE");
+                        return;
+                    }
+                }
+                let result = node.handle_find_value(&find);
+                let body = to_cbor(&result).unwrap();
+                Frame::response(&frame, MSG_FIND_VALUE_RESULT, body)
+            }
+            _ => {
+                tracing::debug!(msg_type = frame.msg_type, "unknown message type");
+                return;
+            }
+        }
+    };
+
+    if let Err(e) = sender.send(&response).await {
+        tracing::debug!("failed to send response: {e}");
+    }
+}

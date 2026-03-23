@@ -1,0 +1,42 @@
+[package]
+name = "mesh-hub"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mesh-hub"
+path = "src/main.rs"
+
+[dependencies]
+mesh-core = { path = "../mesh-core" }
+mesh-dht = { path = "../mesh-dht" }
+mesh-transport = { path = "../mesh-transport" }
+mesh-schemas = { path = "../mesh-schemas" }
+
+# Storage
+redb = "2"
+moka = { version = "0.12", features = ["sync"] }
+
+# Tenant DB
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Admin API
+axum = "0.8"
+serde_json = "1"
+
+# Config
+toml = "0.8"
+
+# Shared workspace deps
+serde = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+hex = { workspace = true }
+blake3 = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3"

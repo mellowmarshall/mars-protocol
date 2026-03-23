@@ -896,25 +896,25 @@ development begins — mesh-hub depends on them.
   - Descriptor builder API for ergonomic descriptor construction
   - Integration tests against mesh-node
 
-### Phase 0: Core Hub (status: planned)
-- [ ] `mesh-hub` crate scaffolding in workspace
-- [ ] `mesh-hub/src/lib.rs` — HubRuntime with builder pattern (Section 1.3)
-- [ ] `mesh-hub/src/main.rs` — thin binary wrapper over HubRuntime
-- [ ] Full 256-bucket Kademlia routing table (already in mesh-dht)
-- [ ] Implement `DescriptorStorage` trait with redb backend (disk-backed)
-- [ ] L1 in-memory hot cache wrapping redb storage (moka or quick_cache)
-- [ ] Storage indexes (by routing key, publisher, schema, expiry)
-- [ ] Expiry background task
-- [ ] Hub self-advertisement (`infrastructure/hub` descriptor)
-- [ ] TenantManager with SQLite backend (public API, Section 1.3)
-- [ ] Admin API as composable Axum Router (public, mergeable by downstream)
-- [ ] CLI binary with TOML config
-- [ ] Health check endpoints
-- [ ] Connection rate limiting per IP (Section 9.1)
-- [ ] Protocol abuse rate limiting per identity (Section 9.1)
-- [ ] Admin API localhost-only binding with auth (Section 9.2)
-- [ ] Policy engine — blocklists and store mode (Section 9.3)
-- [ ] Graceful shutdown with drain period (Section 10.1)
+### Phase 0: Core Hub (status: implemented)
+- [x] `mesh-hub` crate scaffolding in workspace
+- [x] `mesh-hub/src/lib.rs` — HubRuntime with builder pattern (Section 1.3)
+- [x] `mesh-hub/src/main.rs` — thin binary wrapper over HubRuntime
+- [x] Full 256-bucket Kademlia routing table (already in mesh-dht)
+- [x] Implement `DescriptorStorage` trait with redb backend (disk-backed)
+- [x] L1 in-memory hot cache wrapping redb storage (moka)
+- [x] Storage indexes (by routing key, dedup key, sequence tracking)
+- [x] Expiry background task (60s interval)
+- [ ] Hub self-advertisement (`infrastructure/hub` descriptor) — deferred to Phase 1
+- [x] TenantManager with SQLite backend (public API, Section 1.3)
+- [x] Admin API as composable Axum Router (public, mergeable by downstream)
+- [x] CLI binary with TOML config
+- [x] Health check endpoints (/healthz, /readyz)
+- [ ] Connection rate limiting per IP (Section 9.1) — deferred to Phase 4
+- [ ] Protocol abuse rate limiting per identity (Section 9.1) — deferred to Phase 4
+- [ ] Admin API localhost-only binding with auth (Section 9.2) — deferred to Phase 2
+- [x] Policy engine — blocklists and store mode (Section 9.3)
+- [x] Graceful shutdown with drain period (Section 10.1)
 
 ### Phase 1: Hub Peering (status: planned)
 - [ ] Hub discovery via FIND_VALUE at `infrastructure/hub` routing key
