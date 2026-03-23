@@ -20,10 +20,11 @@ use crate::transport::{Transport, TransportError};
 
 /// Configuration for a DHT node.
 #[derive(Debug, Clone)]
+/// Configuration for the Kademlia DHT node.
 pub struct DhtConfig {
-    /// Kademlia concurrency parameter (α).
+    /// Kademlia concurrency parameter (α) — parallel lookups per iteration.
     pub alpha: usize,
-    /// Maximum results to return for FIND_VALUE.
+    /// Maximum descriptors to return for a FIND_VALUE response.
     pub max_find_value_results: u16,
 }
 

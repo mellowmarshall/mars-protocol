@@ -185,6 +185,15 @@ impl Descriptor {
             });
         }
 
+        // TTL bounds check (Section 4.1: min 60s, max 86400s)
+        if self.ttl < MIN_TTL_SECS || self.ttl > MAX_TTL_SECS {
+            return Err(MeshError::InvalidTtl {
+                ttl: self.ttl,
+                min: MIN_TTL_SECS,
+                max: MAX_TTL_SECS,
+            });
+        }
+
         // Step 5: Routing keys non-empty and <= 8
         if self.routing_keys.is_empty() {
             return Err(MeshError::InvalidRoutingKeys {
@@ -459,6 +468,192 @@ mod tests {
         .unwrap();
         // Should be valid because effective_start = min(slight_future, now) = now
         // and now + 3600s > now
+        assert!(desc.validate(now).is_ok());
+    }
+
+    #[test]
+    fn validate_ttl_too_low() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        // TTL of 30s is below minimum of 60s
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            30,
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        assert!(matches!(
+            desc.validate(now),
+            Err(MeshError::InvalidTtl { .. })
+        ));
+    }
+
+    #[test]
+    fn validate_ttl_too_high() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        // TTL of 100000s exceeds maximum of 86400s
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            100_000,
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        assert!(matches!(
+            desc.validate(now),
+            Err(MeshError::InvalidTtl { .. })
+        ));
+    }
+
+    #[test]
+    fn validate_ttl_boundary_min() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            MIN_TTL_SECS, // exactly 60
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        assert!(desc.validate(now).is_ok());
+    }
+
+    #[test]
+    fn validate_ttl_boundary_max() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            MAX_TTL_SECS, // exactly 86400
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        assert!(desc.validate(now).is_ok());
+    }
+
+    #[test]
+    fn validate_forged_id() {
+        // Create valid descriptor then swap in a completely fabricated id
+        let kp = Keypair::generate();
+        let now = now_micros();
+        let mut desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "topic".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        // Replace id with a hash of something else
+        desc.id = Hash::blake3(b"forged id");
+        // Re-sign with the forged id so signature passes
+        desc.signature = kp.sign(&desc.id.digest);
+        // Validation should still fail because recomputed id won't match
+        assert!(matches!(
+            desc.validate(now),
+            Err(MeshError::IdMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn validate_empty_signature() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        let mut desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        desc.signature = vec![]; // empty signature
+        assert!(matches!(
+            desc.validate(now),
+            Err(MeshError::InvalidSignature)
+        ));
+    }
+
+    #[test]
+    fn validate_topic_at_max_length() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        // Exactly 255 bytes is valid
+        let topic = "x".repeat(255);
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            topic,
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        assert!(desc.validate(now).is_ok());
+    }
+
+    #[test]
+    fn validate_exactly_8_routing_keys() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        let keys: Vec<Hash> = (0..8).map(|i| routing_key(&format!("key{i}"))).collect();
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            keys,
+        )
+        .unwrap();
+        assert!(desc.validate(now).is_ok());
+    }
+
+    #[test]
+    fn validate_payload_at_max_size() {
+        let kp = Keypair::generate();
+        let now = now_micros();
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "".into(),
+            vec![0u8; MAX_PAYLOAD_SIZE], // exactly 65536
+            now,
+            1,
+            3600,
+            vec![routing_key("test")],
+        )
+        .unwrap();
         assert!(desc.validate(now).is_ok());
     }
 }

@@ -33,6 +33,10 @@ pub enum MeshError {
     #[error("topic too long: {size} bytes (max {max})")]
     TopicTooLong { size: usize, max: usize },
 
+    /// TTL out of valid range.
+    #[error("invalid ttl: {ttl}s (must be {min}-{max}s)")]
+    InvalidTtl { ttl: u32, min: u32, max: u32 },
+
     /// Stale descriptor (sequence too low).
     #[error("stale descriptor: sequence {received} < {expected}")]
     StaleSequence { received: u64, expected: u64 },

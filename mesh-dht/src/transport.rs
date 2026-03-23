@@ -11,12 +11,16 @@ use mesh_core::message::NodeAddr;
 /// Errors from transport operations.
 #[derive(Debug, thiserror::Error)]
 pub enum TransportError {
+    /// Failed to establish a connection to the peer.
     #[error("connection failed: {0}")]
     ConnectionFailed(String),
+    /// The request timed out waiting for a response.
     #[error("request timed out")]
     Timeout,
+    /// Error encoding or decoding a protocol frame.
     #[error("frame error: {0}")]
     FrameError(String),
+    /// The peer address could not be reached.
     #[error("peer unreachable: {0}")]
     Unreachable(String),
 }

@@ -221,4 +221,49 @@ mod tests {
         let parsed = Frame::from_bytes(&bytes).unwrap();
         assert_eq!(parsed.body, body);
     }
+
+    #[test]
+    fn frame_body_len_exceeds_data() {
+        // Craft a frame where body_len claims more data than provided
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&FRAME_MAGIC.to_be_bytes());
+        buf.push(PROTOCOL_VERSION);
+        buf.push(MSG_PING);
+        buf.extend_from_slice(&[0u8; 16]); // msg_id
+        buf.extend_from_slice(&1000u32.to_be_bytes()); // claims 1000 bytes
+        buf.extend_from_slice(&[0u8; 10]); // only 10 bytes
+        assert!(Frame::from_bytes(&buf).is_err());
+    }
+
+    #[test]
+    fn frame_valid_msg_types() {
+        // All request types have bit 7 clear
+        for &t in &[MSG_PING, MSG_STORE, MSG_FIND_NODE, MSG_FIND_VALUE] {
+            assert_eq!(
+                t & 0x80,
+                0,
+                "request type 0x{t:02x} should have bit 7 clear"
+            );
+        }
+        // All response types have bit 7 set
+        for &t in &[
+            MSG_PONG,
+            MSG_STORE_ACK,
+            MSG_FIND_NODE_RESULT,
+            MSG_FIND_VALUE_RESULT,
+        ] {
+            assert_ne!(t & 0x80, 0, "response type 0x{t:02x} should have bit 7 set");
+        }
+    }
+
+    #[test]
+    fn frame_zero_body_len() {
+        let frame = Frame::new(MSG_PING, vec![]);
+        let bytes = frame.to_bytes();
+        // Verify body_len field is 0
+        let body_len = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+        assert_eq!(body_len, 0);
+        let parsed = Frame::from_bytes(&bytes).unwrap();
+        assert!(parsed.body.is_empty());
+    }
 }

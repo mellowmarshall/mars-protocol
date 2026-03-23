@@ -274,4 +274,32 @@ mod tests {
         assert!(decoded.descriptors.is_none());
         assert!(decoded.nodes.is_some());
     }
+
+    #[test]
+    fn malformed_cbor_rejected() {
+        let garbage = vec![0xFF, 0xFE, 0xFD];
+        let result = from_cbor::<Ping>(&garbage);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn empty_cbor_rejected() {
+        let result = from_cbor::<StoreAck>(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn find_value_default_filters() {
+        let kp = Keypair::generate();
+        let msg = FindValue {
+            sender: kp.identity(),
+            key: Hash::blake3(b"test"),
+            max_results: 20,
+            filters: None,
+        };
+        let bytes = to_cbor(&msg).unwrap();
+        let decoded: FindValue = from_cbor(&bytes).unwrap();
+        assert!(decoded.filters.is_none());
+        assert_eq!(decoded.max_results, 20);
+    }
 }

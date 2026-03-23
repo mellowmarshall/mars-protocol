@@ -70,12 +70,16 @@ pub struct DescriptorStore {
 }
 
 /// Errors from storage operations.
+/// Errors from descriptor storage operations.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
+    /// Descriptor failed validation (Section 2.2).
     #[error("descriptor validation failed: {0}")]
     ValidationFailed(String),
+    /// Descriptor sequence is older than what we already have.
     #[error("stale descriptor: sequence {received} < current {current}")]
     StaleDescriptor { received: u64, current: u64 },
+    /// Publisher exceeded the per-identity rate limit.
     #[error("rate limited: publisher exceeded {limit} stores per minute")]
     RateLimited { limit: usize },
 }
@@ -162,20 +166,39 @@ impl DescriptorStore {
     }
 
     /// Retrieve descriptors at a routing key, optionally applying filters.
+    ///
+    /// Automatically excludes expired descriptors based on effective TTL.
     pub fn get_descriptors(
         &self,
         routing_key: &Hash,
         filters: Option<&FilterSet>,
     ) -> Vec<Descriptor> {
+        let now = Self::now_micros();
+        self.get_descriptors_at(routing_key, filters, now)
+    }
+
+    /// Retrieve descriptors with an explicit timestamp (for testing).
+    pub fn get_descriptors_at(
+        &self,
+        routing_key: &Hash,
+        filters: Option<&FilterSet>,
+        now_micros: u64,
+    ) -> Vec<Descriptor> {
         let Some(descriptors) = self.store.get(routing_key) else {
             return Vec::new();
         };
 
-        match filters {
-            None => descriptors.clone(),
-            Some(f) => descriptors
-                .iter()
-                .filter(|d| {
+        descriptors
+            .iter()
+            .filter(|d| {
+                // Filter expired descriptors using effective TTL
+                let effective_start = std::cmp::min(d.timestamp, now_micros);
+                let ttl_micros = u64::from(d.ttl) * 1_000_000;
+                if effective_start + ttl_micros <= now_micros {
+                    return false;
+                }
+                // Apply user filters
+                if let Some(f) = filters {
                     if let Some(ref sh) = f.schema_hash
                         && &d.schema_hash != sh
                     {
@@ -191,11 +214,11 @@ impl DescriptorStore {
                     {
                         return false;
                     }
-                    true
-                })
-                .cloned()
-                .collect(),
-        }
+                }
+                true
+            })
+            .cloned()
+            .collect()
     }
 
     /// Remove all expired descriptors from the store.
@@ -562,5 +585,116 @@ mod tests {
         let rk = routing_key("nonexistent");
         assert!(store.get_descriptors(&rk, None).is_empty());
         assert!(!store.has_descriptors(&rk));
+    }
+
+    #[test]
+    fn sequence_replacement_across_routing_keys() {
+        // When a newer sequence replaces an older one, it should be removed
+        // from ALL routing keys, not just the ones in the new descriptor
+        let mut store = DescriptorStore::new();
+        let kp = Keypair::generate();
+        let rk1 = routing_key("compute");
+        let rk2 = routing_key("compute/inference");
+
+        let desc1 = make_descriptor_with_keys(&kp, "topic", 1, vec![rk1.clone(), rk2.clone()]);
+        store.store_descriptor(desc1).unwrap();
+        assert_eq!(store.get_descriptors(&rk1, None).len(), 1);
+        assert_eq!(store.get_descriptors(&rk2, None).len(), 1);
+
+        // New version with same dedup key replaces across all routing keys
+        let desc2 = make_descriptor_with_keys(&kp, "topic", 2, vec![rk1.clone(), rk2.clone()]);
+        store.store_descriptor(desc2).unwrap();
+        assert_eq!(store.get_descriptors(&rk1, None).len(), 1);
+        assert_eq!(store.get_descriptors(&rk2, None).len(), 1);
+        // Verify it's the new one
+        assert_eq!(store.get_descriptors(&rk1, None)[0].sequence, 2);
+        assert_eq!(store.get_descriptors(&rk2, None)[0].sequence, 2);
+    }
+
+    #[test]
+    fn expired_descriptors_filtered_on_read() {
+        let mut store = DescriptorStore::new();
+        let kp = Keypair::generate();
+        let rk = routing_key("compute/inference/text-generation");
+        let now = now_micros();
+
+        // Create descriptor with 60s TTL
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "topic".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            60,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        store.store_descriptor_at(desc, now).unwrap();
+
+        // Should be visible now
+        assert_eq!(
+            store.get_descriptors_at(&rk, None, now + 30_000_000).len(),
+            1
+        );
+
+        // Should be filtered out when expired (without calling evict_expired)
+        assert_eq!(
+            store.get_descriptors_at(&rk, None, now + 61_000_000).len(),
+            0
+        );
+    }
+
+    #[test]
+    fn equal_sequence_accepted() {
+        // Spec says >= not >. Equal sequence should be accepted (idempotent republish)
+        let mut store = DescriptorStore::new();
+        let kp = Keypair::generate();
+
+        let desc1 = make_descriptor(&kp, "topic", 5, 3600);
+        store.store_descriptor(desc1).unwrap();
+
+        // Same sequence should succeed (not be rejected as stale)
+        let desc2 = make_descriptor(&kp, "topic", 5, 3600);
+        assert!(store.store_descriptor(desc2).is_ok());
+    }
+
+    #[test]
+    fn rate_limit_per_publisher_independent() {
+        // Rate limits are per-publisher, not global
+        let mut store = DescriptorStore::new();
+        let kp1 = Keypair::generate();
+        let kp2 = Keypair::generate();
+        let now = now_micros();
+
+        // Fill up kp1's rate limit
+        for i in 0..10u64 {
+            let desc = Descriptor::create(
+                &kp1,
+                schema_hash("core/capability"),
+                format!("topic-{i}"),
+                b"payload".to_vec(),
+                now,
+                i + 1,
+                3600,
+                vec![routing_key("test")],
+            )
+            .unwrap();
+            store.store_descriptor_at(desc, now).unwrap();
+        }
+
+        // kp2 should still be able to publish
+        let desc = Descriptor::create(
+            &kp2,
+            schema_hash("core/capability"),
+            "topic".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![routing_key("test")],
+        )
+        .unwrap();
+        assert!(store.store_descriptor_at(desc, now).is_ok());
     }
 }

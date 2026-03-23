@@ -199,4 +199,33 @@ mod tests {
         assert_eq!(decoded[0], ALG_ED25519);
         assert_eq!(&decoded[1..], &id.public_key);
     }
+
+    #[test]
+    fn verify_unknown_algorithm() {
+        let id = Identity::new(0x99, vec![0u8; 32]);
+        let result = id.verify(b"message", &[0u8; 64]);
+        assert!(matches!(result, Err(MeshError::UnknownAlgorithm(0x99))));
+    }
+
+    #[test]
+    fn verify_wrong_key_length() {
+        // Ed25519 key that's the wrong length
+        let id = Identity::new(ALG_ED25519, vec![0u8; 16]); // too short
+        let result = id.verify(b"message", &[0u8; 64]);
+        assert!(matches!(result, Err(MeshError::InvalidSignature)));
+    }
+
+    #[test]
+    fn did_format_correct() {
+        let kp = Keypair::generate();
+        let id = kp.identity();
+        let did = id.did();
+        // Must start with did:mesh:
+        assert!(did.starts_with("did:mesh:"));
+        // Decode and verify format: algo_byte || pubkey_bytes
+        let encoded = did.strip_prefix("did:mesh:").unwrap();
+        let decoded = bs58::decode(encoded).into_vec().unwrap();
+        assert_eq!(decoded.len(), 33); // 1 byte algo + 32 bytes pubkey
+        assert_eq!(decoded[0], ALG_ED25519);
+    }
 }
