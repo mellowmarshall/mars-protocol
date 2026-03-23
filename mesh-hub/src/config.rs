@@ -4,6 +4,8 @@ use serde::Deserialize;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use crate::rate_limit::RateLimitConfig;
+
 /// Top-level hub configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct HubConfig {
@@ -19,6 +21,13 @@ pub struct HubConfig {
     pub security: SecurityConfig,
     #[serde(default)]
     pub peering: PeeringConfig,
+    #[serde(default)]
+    pub mu_costs: MuCosts,
+    /// Operator bearer token for admin API authentication.
+    pub operator_token: Option<String>,
+    /// Rate limiting configuration (not TOML-deserializable, uses defaults).
+    #[serde(skip)]
+    pub rate_limit: RateLimitConfig,
 }
 
 /// Hub-to-hub peering configuration.
@@ -199,6 +208,46 @@ fn default_50() -> u32 {
 
 fn default_20() -> u32 {
     20
+}
+
+/// MU (Metering Unit) cost table for hub operations.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MuCosts {
+    /// Cost of storing a new descriptor (default: 10).
+    #[serde(default = "default_mu_store_new")]
+    pub store_new: i64,
+    /// Cost of updating an existing descriptor (default: 5).
+    #[serde(default = "default_mu_store_update")]
+    pub store_update: i64,
+    /// Cost of a find_value query (default: 1).
+    #[serde(default = "default_mu_find")]
+    pub find_value: i64,
+    /// Cost of a find_node query (default: 1).
+    #[serde(default = "default_mu_find")]
+    pub find_node: i64,
+}
+
+impl Default for MuCosts {
+    fn default() -> Self {
+        Self {
+            store_new: 10,
+            store_update: 5,
+            find_value: 1,
+            find_node: 1,
+        }
+    }
+}
+
+fn default_mu_store_new() -> i64 {
+    10
+}
+
+fn default_mu_store_update() -> i64 {
+    5
+}
+
+fn default_mu_find() -> i64 {
+    1
 }
 
 impl HubConfig {

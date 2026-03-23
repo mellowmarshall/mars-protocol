@@ -987,6 +987,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "blake3",
+ "ciborium",
  "clap",
  "hex",
  "mesh-core",
@@ -994,6 +995,7 @@ dependencies = [
  "mesh-schemas",
  "mesh-transport",
  "moka",
+ "rand 0.8.5",
  "redb",
  "rusqlite",
  "serde",

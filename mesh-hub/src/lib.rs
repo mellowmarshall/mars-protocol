@@ -6,10 +6,12 @@
 //! commercial service, and an admin API.
 
 pub mod admin;
+pub mod auth;
 pub mod config;
 pub mod hooks;
 pub mod peering;
 pub mod policy;
+pub mod rate_limit;
 pub mod storage;
 pub mod tenant;
 
@@ -32,6 +34,7 @@ use crate::config::HubConfig;
 use crate::hooks::HubProtocolHook;
 use crate::peering::{HubMetadata, PeerManager};
 use crate::policy::PolicyEngine;
+use crate::rate_limit::HubRateLimiter;
 use crate::storage::CachedStorage;
 use crate::storage::redb::RedbStorage;
 use crate::tenant::TenantManager;
@@ -48,6 +51,8 @@ pub struct HubRuntime {
     tenant_manager: Arc<Mutex<TenantManager>>,
     /// Peer manager for hub-to-hub peering (None if peering is disabled).
     peer_manager: Option<Arc<tokio::sync::Mutex<PeerManager>>>,
+    /// Rate limiter for per-IP and per-identity throttling.
+    rate_limiter: Arc<HubRateLimiter>,
 }
 
 impl HubRuntime {
@@ -62,6 +67,8 @@ impl HubRuntime {
             dht_node: self.dht_node.clone(),
             tenant_manager: self.tenant_manager.clone(),
             start_time: std::time::Instant::now(),
+            hub_did: Some(self.hub_identity.did()),
+            operator_token: self.config.operator_token.clone(),
         });
         admin_router(state)
     }
@@ -73,6 +80,8 @@ impl HubRuntime {
             dht_node: self.dht_node.clone(),
             tenant_manager: self.tenant_manager.clone(),
             start_time: std::time::Instant::now(),
+            hub_did: Some(self.hub_identity.did()),
+            operator_token: self.config.operator_token.clone(),
         });
         let router = admin_router(admin_state);
 
@@ -94,6 +103,16 @@ impl HubRuntime {
                     node.store.evict_expired();
                     tracing::debug!("expired descriptors evicted");
                 }
+            }
+        });
+
+        // Spawn rate limiter cleanup task (every 2 minutes)
+        let rl = self.rate_limiter.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(120)).await;
+                rl.cleanup();
+                tracing::debug!("rate limiter stale entries cleaned");
             }
         });
 
@@ -215,9 +234,12 @@ impl HubBuilder {
             &self.config.tenants.db_path,
         )?));
 
+        // Rate limiter
+        let rate_limiter = Arc::new(HubRateLimiter::new(self.config.rate_limit.clone()));
+
         // Policy engine + protocol hook
         let policy = PolicyEngine::new(self.config.policy.clone());
-        let hook = Arc::new(HubProtocolHook::new(policy, tenant_manager.clone()));
+        let hook = Arc::new(HubProtocolHook::new(policy, tenant_manager.clone(), rate_limiter.clone()));
 
         // QUIC endpoint (before moving keypair)
         let listen_addr = self.config.network.listen_addr;
@@ -264,6 +286,7 @@ impl HubBuilder {
             endpoint,
             tenant_manager,
             peer_manager,
+            rate_limiter,
         })
     }
 }

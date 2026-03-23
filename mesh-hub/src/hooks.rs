@@ -1,4 +1,4 @@
-//! Hub protocol hook — policy enforcement at the DHT layer.
+//! Hub protocol hook — policy enforcement and rate limiting at the DHT layer.
 
 use std::sync::{Arc, Mutex};
 
@@ -6,26 +6,43 @@ use mesh_core::{Descriptor, Hash};
 use mesh_dht::ProtocolHook;
 
 use crate::policy::PolicyEngine;
+use crate::rate_limit::{HubRateLimiter, Operation};
 use crate::storage::redb::identity_bytes;
 use crate::tenant::TenantManager;
 
-/// Protocol hook that enforces hub policy on incoming DHT operations.
+/// Protocol hook that enforces hub policy and rate limits on incoming DHT operations.
 pub struct HubProtocolHook {
     policy: PolicyEngine,
     tenant_manager: Arc<Mutex<TenantManager>>,
+    rate_limiter: Arc<HubRateLimiter>,
 }
 
 impl HubProtocolHook {
-    pub fn new(policy: PolicyEngine, tenant_manager: Arc<Mutex<TenantManager>>) -> Self {
+    pub fn new(
+        policy: PolicyEngine,
+        tenant_manager: Arc<Mutex<TenantManager>>,
+        rate_limiter: Arc<HubRateLimiter>,
+    ) -> Self {
         Self {
             policy,
             tenant_manager,
+            rate_limiter,
         }
     }
 }
 
 impl ProtocolHook for HubProtocolHook {
     fn pre_store(&self, descriptor: &Descriptor) -> Result<(), String> {
+        // Rate limit check (identity-based).
+        // TODO: Add IP-based rate limiting once IP context is available in the hook interface.
+        if let Err(e) = self
+            .rate_limiter
+            .check_identity(&descriptor.publisher, Operation::Store)
+        {
+            tracing::warn!(publisher = %descriptor.publisher.did(), %e, "store rate limited");
+            return Err("rate limited".into());
+        }
+
         let id_bytes = identity_bytes(&descriptor.publisher);
         let is_tenant = self
             .tenant_manager
@@ -47,6 +64,9 @@ impl ProtocolHook for HubProtocolHook {
     }
 
     fn pre_query(&self, _routing_key: &Hash) -> Result<(), String> {
+        // TODO: Add identity-based query rate limiting once the pre_query interface
+        // includes the requesting identity. Currently pre_query only receives the
+        // routing key, so identity-based rate limiting is not possible here.
         Ok(())
     }
 
