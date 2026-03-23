@@ -1,0 +1,116 @@
+# ============================================================================
+# Mesh Hub — Example Configuration
+# ============================================================================
+# A hub is a high-capacity mesh node with disk-backed storage, multi-tenant
+# management, and an admin API. This example configures a production-ready
+# hub for hosting AI agent capabilities.
+#
+# Usage:
+#   mesh-hub --generate-keypair        # first run only
+#   mesh-hub --config examples/hub.toml
+
+# ── Identity ─────────────────────────────────────────────────────────────────
+
+[identity]
+# Path to the hub's Ed25519 secret key (32 bytes).
+# Generate with: mesh-hub --generate-keypair
+keypair_path = "data/hub-identity.key"
+
+# ── Network ──────────────────────────────────────────────────────────────────
+
+[network]
+# QUIC listener for mesh protocol traffic (nodes, clients, peers).
+listen_addr = "0.0.0.0:4433"
+
+# HTTP admin API (bind to localhost in production).
+admin_addr = "127.0.0.1:8080"
+
+# ── Storage ──────────────────────────────────────────────────────────────────
+
+[storage]
+# Directory for redb descriptor database and other persistent state.
+data_dir = "data"
+
+# Number of descriptors to keep in the in-memory LRU hot cache (L1).
+# Increase for hubs serving high query volume.
+hot_cache_entries = 50_000
+
+# ── Tenants ──────────────────────────────────────────────────────────────────
+
+[tenants]
+# Enable multi-tenant management with per-org quotas and MU metering.
+enabled = true
+
+# SQLite database for tenant state.
+db_path = "data/tenants.sqlite"
+
+# ── Policy ───────────────────────────────────────────────────────────────────
+
+[policy]
+# Store mode: "open" (anyone can store), "tenant-only" (registered tenants),
+# or "allowlist" (specific identities only).
+store_mode = "tenant-only"
+
+# Block specific identities or routing keys from storing descriptors.
+# blocked_identities = ["did:mesh:abc123..."]
+# blocked_routing_keys = ["spam/known-bad"]
+
+# ── Security ─────────────────────────────────────────────────────────────────
+
+[security]
+# Max concurrent QUIC connections from a single IP.
+max_connections_per_ip = 50
+
+# Max DHT queries per identity per second.
+max_queries_per_identity_per_sec = 20
+
+# Bearer token for admin API authentication.
+# Generate a strong random token: openssl rand -hex 32
+admin_bearer_token = "CHANGE-ME-generate-a-real-token"
+
+# Addresses allowed for outbound connections even if private/loopback.
+# Useful for testing or private mesh deployments.
+# outbound_allowlist = ["10.0.0.5:4433"]
+
+# ── MU Costs ─────────────────────────────────────────────────────────────────
+
+[mu_costs]
+# Metering unit costs per operation. Adjust to match your pricing model.
+store_new = 10       # Cost to store a new descriptor
+store_update = 5     # Cost to update an existing descriptor
+find_value = 1       # Cost of a FIND_VALUE query
+find_node = 1        # Cost of a FIND_NODE query
+
+# ── Peering ──────────────────────────────────────────────────────────────────
+
+[peering]
+# Enable hub-to-hub federation. Hubs discover each other via DHT and
+# exchange descriptors through gossip rounds.
+enabled = false
+
+# Seconds between gossip rounds (exchange recent descriptors with peers).
+gossip_interval_secs = 60
+
+# Seconds between PING health checks to connected peers.
+health_check_interval_secs = 10
+
+# Maximum number of peer hubs to connect to.
+max_peers = 50
+
+# Regions this hub serves (for peer metadata advertisement).
+# regions = ["us-east", "us-west"]
+
+# Maximum descriptors this hub stores (advertised to peers for load balancing).
+max_descriptors = 1_000_000
+
+# ── Observability ────────────────────────────────────────────────────────────
+
+[observability]
+# Expose Prometheus metrics at GET /metrics (requires operator_token auth).
+metrics_enabled = true
+
+# ── Operator Token ───────────────────────────────────────────────────────────
+
+# Top-level operator token. Used for admin API auth if security.admin_bearer_token
+# is not set. Generate with: openssl rand -hex 32
+operator_token = "CHANGE-ME-generate-a-real-token"
