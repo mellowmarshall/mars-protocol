@@ -12,3 +12,4 @@ rand = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 hex = { workspace = true }
+bs58 = { workspace = true }
