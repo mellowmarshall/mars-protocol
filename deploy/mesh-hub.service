@@ -1,0 +1,47 @@
+[Unit]
+Description=Mesh Protocol Hub
+Documentation=https://github.com/marshallbrett/mesh-protocol
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mesh
+Group=mesh
+
+ExecStart=/usr/local/bin/mesh-hub --config /etc/mesh-hub/mesh-hub.toml
+
+# Persistent state
+StateDirectory=mesh-hub
+WorkingDirectory=/var/lib/mesh-hub
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mesh-hub
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mesh-hub
+
+# Resource limits (adjust for your VPS)
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
