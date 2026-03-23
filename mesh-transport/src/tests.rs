@@ -45,7 +45,9 @@ fn tls_server_crypto_config() {
 
 #[test]
 fn tls_client_crypto_config() {
-    let config = tls::client_crypto_config().unwrap();
+    let kp = Keypair::generate();
+    let (certs, key) = tls::generate_self_signed_cert(&kp).unwrap();
+    let config = tls::client_crypto_config(certs, key).unwrap();
     assert_eq!(config.alpn_protocols, vec![tls::MESH_ALPN.to_vec()]);
 }
 

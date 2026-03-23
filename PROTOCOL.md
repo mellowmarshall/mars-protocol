@@ -15,7 +15,7 @@ This protocol is designed to outlast its creators.
 1. The protocol has no opinions about what capabilities are.
 2. The core never changes. Evolution happens in payload schemas.
 3. Every identifier is a content-hash. No registries.
-4. Every message is signed. No unsigned communication.
+4. All durable artifacts (descriptors) are cryptographically signed by their publisher. Protocol messages are authenticated via mutual TLS with Ed25519 identity binding.
 5. Algorithm agility is mandatory. No hardcoded cryptography.
 6. No global state. Eventually consistent. Scales to billions.
 7. The spec is the bytes on the wire. No canonical implementation.
@@ -103,10 +103,27 @@ lookup. Registration of the `did:mesh` method follows W3C DID Core conventions
 but requires no DID registry. The method-specific identifier is the multibase
 encoding of the algorithm-tagged public key.
 
-### 1.4 Signature Envelope
+### 1.4 Authentication Model
+
+The protocol uses a **hybrid authentication model**:
+
+- **Descriptors** (durable artifacts) carry Ed25519 signatures from their
+  publisher (Section 2). These signatures are self-authenticating — any node can
+  verify a descriptor's integrity and origin regardless of how it was received
+  (direct connection, hub relay, cache, or federation).
+- **Protocol messages** (ephemeral) are authenticated via TLS identity binding
+  (Section 3.1.1). Each node's Ed25519 mesh keypair generates a self-signed TLS
+  certificate. Receivers MUST verify that the `sender` field in each protocol
+  message matches the TLS-authenticated peer identity.
+
+This model signs the artifacts that outlive the connection (descriptors) while
+authenticating the transport for everything else (protocol messages), avoiding
+per-message signature overhead at scale.
+
+#### 1.4.1 Signed\<T\> Envelope (Reserved)
 
 The `Signed<T>` envelope is defined for future protocol versions that may
-support non-TLS transports:
+support non-TLS transports (e.g., store-and-forward, relay over non-QUIC):
 
 ```
 Signed<T> {
@@ -120,11 +137,9 @@ Verification: deserialize `identity`, verify `signature` over `payload` bytes
 using the algorithm specified in `identity.algorithm`. If the algorithm is
 unknown, the message is unverifiable (not invalid — skip, don't reject).
 
-> **Version 0x01 note:** Protocol messages (PING, STORE, FIND_NODE, FIND_VALUE)
-> are **not** wrapped in `Signed<T>`. Authentication is provided by TLS identity
-> binding (Section 3.1.1). Descriptors use their own signature scheme (Section 2)
-> independent of `Signed<T>`. The `Signed<T>` envelope is retained in the spec
-> for forward compatibility but is not used on the wire in version 0x01.
+> **Forward compatibility note:** The `Signed<T>` envelope is not used on the
+> wire in version 0x01. It is retained for future transports that lack built-in
+> peer authentication.
 
 ### 1.5 CBOR Wire Format Rules
 
@@ -248,22 +263,30 @@ Each stream carries exactly one request-response pair.
 
 #### 3.1.1 TLS Identity Binding
 
-In protocol version 0x01, message authentication uses **TLS identity binding**
-rather than per-message `Signed<T>` envelopes (Section 1.4). Each node
-generates a self-signed TLS certificate whose public key is its Ed25519 mesh
-keypair. During the QUIC handshake, both peers present their TLS certificates.
-The peer's mesh identity is extracted from their TLS certificate — no
-additional authentication step is needed because TLS already proves possession
-of the corresponding private key.
+In protocol version 0x01, protocol message authentication uses **TLS identity
+binding** rather than per-message `Signed<T>` envelopes (Section 1.4.1).
 
-A receiving node MUST verify that the `sender` field in each incoming message
-matches the identity from the peer's TLS certificate. Mismatches indicate
-spoofing and MUST cause the message to be rejected.
+Normative requirements:
+
+1. **Mutual TLS is REQUIRED.** Both client and server MUST present TLS
+   certificates during the QUIC handshake.
+2. **Certificate derivation.** Each node generates a self-signed TLS certificate
+   whose public key is its Ed25519 mesh keypair. The certificate MUST use the
+   Ed25519 algorithm (OID 1.3.101.112).
+3. **Peer identity extraction.** After the QUIC handshake completes, each side
+   MUST extract the peer's Ed25519 public key from their TLS certificate. This
+   becomes the peer's authenticated mesh identity for the lifetime of the
+   connection.
+4. **Sender field verification.** A receiving node MUST verify that the `sender`
+   field in each incoming protocol message matches the TLS-authenticated peer
+   identity. Mismatches indicate spoofing and MUST cause the message to be
+   rejected.
 
 This model provides per-connection authentication with zero per-message
 overhead. Descriptor signatures (Section 2) remain independent of transport
-authentication — descriptors are verified by their content hash and signature
-regardless of how they were received.
+authentication — descriptors are verified by their content hash and publisher
+signature regardless of how they were received (direct, relayed, cached, or
+federated).
 
 ### 3.2 Message Frame
 
@@ -1298,9 +1321,11 @@ Computed as `BLAKE3("mesh:schema:<name>")`:
 ### C.1 Canonical Hash Input Format
 
 The canonical hash input for computing a descriptor's content ID is a **CBOR map
-(major type 5)** with string keys sorted in lexicographic (byte) order. Each key
-is a CBOR text string (major type 3). Values use the exact CBOR types specified
-below.
+(major type 5)** with string keys sorted per **RFC 8949 §4.2.1** (deterministic
+encoding): bytewise lexicographic order of the CBOR-encoded keys. For text
+string keys this means shorter keys sort first (because the CBOR length prefix
+byte is smaller), then lexicographic within the same length. Each key is a CBOR
+text string (major type 3). Values use the exact CBOR types specified below.
 
 This canonical form is used **only** for computing the descriptor ID hash. It is
 **not** the wire format for network serialization (which may use any valid CBOR
@@ -1308,18 +1333,21 @@ encoding, including arrays or different key orderings).
 
 ### C.2 Field Types
 
-| Key (text string) | CBOR Type | Description |
-|---|---|---|
-| `payload` | byte string (major type 2) | Raw payload bytes |
-| `publisher` | array: [unsigned integer (algo), byte string (pubkey)] | Publisher identity |
-| `routing_keys` | array of arrays: [[unsigned integer (algo), byte string (digest)], ...] | DHT routing keys |
-| `schema_hash` | array: [unsigned integer (algo), byte string (digest)] | Schema content hash |
-| `sequence` | unsigned integer (major type 0) | Monotonic sequence number |
-| `timestamp` | unsigned integer (major type 0) | Microseconds since Unix epoch |
-| `topic` | text string (major type 3) | Publisher-chosen topic |
-| `ttl` | unsigned integer (major type 0) | Time-to-live in seconds |
+| Key (text string) | Length | CBOR Type | Description |
+|---|---|---|---|
+| `ttl` | 3 | unsigned integer (major type 0) | Time-to-live in seconds |
+| `topic` | 5 | text string (major type 3) | Publisher-chosen topic |
+| `payload` | 7 | byte string (major type 2) | Raw payload bytes |
+| `sequence` | 8 | unsigned integer (major type 0) | Monotonic sequence number |
+| `publisher` | 9 | array: [unsigned integer (algo), byte string (pubkey)] | Publisher identity |
+| `timestamp` | 9 | unsigned integer (major type 0) | Microseconds since Unix epoch |
+| `schema_hash` | 11 | array: [unsigned integer (algo), byte string (digest)] | Schema content hash |
+| `routing_keys` | 12 | array of arrays: [[unsigned integer (algo), byte string (digest)], ...] | DHT routing keys |
 
-Keys MUST appear in the map in the order shown above (which is lexicographic).
+Keys MUST appear in the map in the order shown above, which is the RFC 8949
+§4.2.1 deterministic encoding order (bytewise lexicographic order of
+CBOR-encoded keys). Same-length keys are ordered lexicographically by string
+content (e.g., "publisher" before "timestamp").
 
 ### C.3 Test Vector
 
@@ -1346,19 +1374,19 @@ Keys MUST appear in the map in the order shown above (which is lexicographic).
 **Canonical CBOR (hex, 219 bytes):**
 
 ```
-a8677061796c6f61644c74657374207061796c6f6164697075626c697368657282
-0158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f
-6f5c6c726f7574696e675f6b6579738182035820235ad34c1ac90b981ab12865b8
-d4d5d4d18708fc614cec7fd1d01fad82c6b69a6b736368656d615f686173688203
-5820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3
-306873657175656e6365016974696d657374616d701b00060a24181e400065746f
-7069636a746573742d746f7069636374746c190e10
+a86374746c190e1065746f7069636a746573742d746f706963677061796c6f6164
+4c74657374207061796c6f61646873657175656e636501697075626c6973686572
+820158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b4
+0f6f5c6974696d657374616d701b00060a24181e40006b736368656d615f686173
+6882035820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3
+ffcfb3306c726f7574696e675f6b6579738182035820235ad34c1ac90b981ab128
+65b8d4d5d4d18708fc614cec7fd1d01fad82c6b69a
 ```
 
 **BLAKE3 descriptor ID (hex):**
 
 ```
-a38b23b474083f46592c4584728addb830f35e98434a0010d3d0b4e63c2f0581
+816352037155f3a93b6ffa637bcfffc26f2af5ea1589c0aa6bd5afb1183acb6b
 ```
 
 ### C.4 Additional Test Vectors
@@ -1399,7 +1427,7 @@ Implementations **MUST** produce byte-identical canonical CBOR for the same inpu
 fields. The test vectors in this appendix are the conformance tests.
 
 If your implementation produces the BLAKE3 hash
-`a38b23b474083f46592c4584728addb830f35e98434a0010d3d0b4e63c2f0581` for the
+`816352037155f3a93b6ffa637bcfffc26f2af5ea1589c0aa6bd5afb1183acb6b` for the
 descriptor test vector inputs above, your canonical serialization is correct.
 
 ---

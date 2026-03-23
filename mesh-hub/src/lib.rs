@@ -200,11 +200,9 @@ async fn handle_protocol_request(
                 let Ok(ping) = from_cbor::<Ping>(&frame.body) else {
                     return;
                 };
-                if let Some(ref peer) = peer_identity {
-                    if &ping.sender != peer {
-                        tracing::warn!("sender identity mismatch in PING");
-                        return;
-                    }
+                if let Err(reason) = mesh_dht::verify_sender_binding(&ping.sender, &peer_identity) {
+                    tracing::warn!(reason, "rejecting PING");
+                    return;
                 }
                 let pong = node.handle_ping(&ping);
                 let body = to_cbor(&pong).unwrap();
@@ -214,11 +212,9 @@ async fn handle_protocol_request(
                 let Ok(store_req) = from_cbor::<Store>(&frame.body) else {
                     return;
                 };
-                if let Some(ref peer) = peer_identity {
-                    if &store_req.sender != peer {
-                        tracing::warn!("sender identity mismatch in STORE");
-                        return;
-                    }
+                if let Err(reason) = mesh_dht::verify_sender_binding(&store_req.sender, &peer_identity) {
+                    tracing::warn!(reason, "rejecting STORE");
+                    return;
                 }
                 let ack = node.handle_store(&store_req);
                 let body = to_cbor(&ack).unwrap();
@@ -228,11 +224,9 @@ async fn handle_protocol_request(
                 let Ok(find) = from_cbor::<FindNode>(&frame.body) else {
                     return;
                 };
-                if let Some(ref peer) = peer_identity {
-                    if &find.sender != peer {
-                        tracing::warn!("sender identity mismatch in FIND_NODE");
-                        return;
-                    }
+                if let Err(reason) = mesh_dht::verify_sender_binding(&find.sender, &peer_identity) {
+                    tracing::warn!(reason, "rejecting FIND_NODE");
+                    return;
                 }
                 let result = node.handle_find_node(&find);
                 let body = to_cbor(&result).unwrap();
@@ -242,11 +236,9 @@ async fn handle_protocol_request(
                 let Ok(find) = from_cbor::<FindValue>(&frame.body) else {
                     return;
                 };
-                if let Some(ref peer) = peer_identity {
-                    if &find.sender != peer {
-                        tracing::warn!("sender identity mismatch in FIND_VALUE");
-                        return;
-                    }
+                if let Err(reason) = mesh_dht::verify_sender_binding(&find.sender, &peer_identity) {
+                    tracing::warn!(reason, "rejecting FIND_VALUE");
+                    return;
                 }
                 let result = node.handle_find_value(&find);
                 let body = to_cbor(&result).unwrap();

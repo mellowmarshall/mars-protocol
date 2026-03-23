@@ -21,6 +21,39 @@ use crate::routing::{K, RoutingTable};
 use crate::storage::{DescriptorStorage, DescriptorStore};
 use crate::transport::{Transport, TransportError};
 
+/// Verify that a message's `sender` field matches the TLS-authenticated
+/// peer identity (sender-TLS binding, Section 3.1.1).
+///
+/// Returns `Ok(())` if the peer identity matches the message sender.
+///
+/// Returns `Err(reason)` if:
+/// - The identities don't match (spoofing attempt), or
+/// - No peer identity is available (client auth was not performed)
+pub fn verify_sender_binding(
+    msg_sender: &Identity,
+    peer_identity: &Option<Identity>,
+) -> Result<(), String> {
+    match peer_identity {
+        Some(peer_id) => {
+            if msg_sender != peer_id {
+                Err(format!(
+                    "sender-TLS binding failed: message claims {} but TLS cert is {}",
+                    msg_sender.did(),
+                    peer_id.did(),
+                ))
+            } else {
+                Ok(())
+            }
+        }
+        None => {
+            Err(format!(
+                "sender-TLS binding failed: no peer identity available for sender {}",
+                msg_sender.did(),
+            ))
+        }
+    }
+}
+
 /// Configuration for a DHT node.
 #[derive(Debug, Clone)]
 /// Configuration for the Kademlia DHT node.
@@ -429,6 +462,30 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_micros() as u64
+    }
+
+    // ── Sender-TLS Binding Tests ──
+
+    #[test]
+    fn sender_binding_match() {
+        let kp = Keypair::generate();
+        let id = kp.identity();
+        assert!(verify_sender_binding(&id, &Some(id.clone())).is_ok());
+    }
+
+    #[test]
+    fn sender_binding_mismatch() {
+        let id_a = Keypair::generate().identity();
+        let id_b = Keypair::generate().identity();
+        let err = verify_sender_binding(&id_a, &Some(id_b)).unwrap_err();
+        assert!(err.contains("sender-TLS binding failed"));
+    }
+
+    #[test]
+    fn sender_binding_no_peer_identity() {
+        let id = Keypair::generate().identity();
+        let err = verify_sender_binding(&id, &None).unwrap_err();
+        assert!(err.contains("no peer identity available"));
     }
 
     // ── Mock Transport ──

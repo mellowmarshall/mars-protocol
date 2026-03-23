@@ -46,9 +46,11 @@ impl MeshEndpoint {
     /// mesh keypair and configures QUIC per the protocol spec (Section 8.1).
     #[instrument(skip_all, fields(%addr))]
     pub fn new(addr: SocketAddr, keypair: &Keypair) -> Result<Self> {
+        // Generate cert chain and key once; clone for both server and client configs.
+        // Both sides need the same identity cert for mutual TLS.
         let (cert_chain, key) = tls::generate_self_signed_cert(keypair)?;
-        let server_crypto = tls::server_crypto_config(cert_chain, key)?;
-        let client_crypto = tls::client_crypto_config()?;
+        let server_crypto = tls::server_crypto_config(cert_chain.clone(), key.clone_key())?;
+        let client_crypto = tls::client_crypto_config(cert_chain, key)?;
 
         let transport = Arc::new(mesh_transport_config());
 

@@ -159,26 +159,19 @@ fn make_node_addr(addr: &str) -> NodeAddr {
 
 /// Check that the message's `sender` field matches the TLS-authenticated peer identity.
 ///
-/// Returns `true` if the sender is verified or if the peer identity couldn't be
-/// extracted (e.g., in tests without mutual TLS). Rejects mismatches where the
-/// peer's TLS cert identity differs from the claimed sender.
+/// Delegates to [`mesh_dht::verify_sender_binding`] which implements the canonical
+/// sender-TLS binding check (Section 8.2). Returns `true` if the sender is verified
+/// or if the peer identity is unavailable (graceful degradation).
 fn verify_sender(
     msg_sender: &mesh_core::identity::Identity,
     peer_identity: &Option<mesh_core::identity::Identity>,
 ) -> bool {
-    match peer_identity {
-        Some(peer_id) => {
-            if msg_sender != peer_id {
-                error!(
-                    "sender identity mismatch: message claims {} but TLS cert is {}",
-                    msg_sender.did(),
-                    peer_id.did()
-                );
-                return false;
-            }
-            true
+    match mesh_dht::verify_sender_binding(msg_sender, peer_identity) {
+        Ok(()) => true,
+        Err(reason) => {
+            error!("{reason}");
+            false
         }
-        None => true, // No peer cert available (e.g., no mutual TLS) — allow
     }
 }
 

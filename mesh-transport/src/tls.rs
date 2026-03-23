@@ -5,12 +5,17 @@
 //! identity — the peer's Ed25519 public key in their TLS cert IS their
 //! mesh Identity. Receivers can extract it after the QUIC handshake and
 //! verify that message `sender` fields match.
+//!
+//! Mutual TLS is enabled: both client and server present certificates and
+//! verify the peer's. After the handshake, each side can extract the peer's
+//! mesh [`Identity`] from their TLS certificate via [`identity_from_cert_der`].
 
 use std::sync::Arc;
 
 use mesh_core::identity::{ALG_ED25519, Identity, Keypair};
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
+use rustls::server::danger::ClientCertVerified;
 use rustls::{DigitallySignedStruct, Error as RustlsError, SignatureScheme};
 
 use crate::error::{Result, TransportError};
@@ -18,61 +23,170 @@ use crate::error::{Result, TransportError};
 /// ALPN protocol identifier for the mesh protocol (Section 8.1).
 pub const MESH_ALPN: &[u8] = b"mesh/0";
 
-/// A verifier that accepts any self-signed certificate.
+/// Supported TLS signature verification schemes for mesh transport.
 ///
-/// Mesh nodes authenticate via TLS identity binding: the peer's Ed25519
-/// public key is embedded in their TLS certificate (derived from their
-/// mesh keypair). We skip CA-chain verification but the TLS handshake
-/// still proves the peer holds the private key for their cert.
-#[derive(Debug)]
-struct MeshCertVerifier;
+/// Ed25519 is preferred; other schemes are included for interoperability
+/// with TLS libraries that may use different handshake signature schemes.
+fn supported_schemes() -> Vec<SignatureScheme> {
+    vec![
+        SignatureScheme::ED25519,
+        SignatureScheme::ECDSA_NISTP256_SHA256,
+        SignatureScheme::ECDSA_NISTP384_SHA384,
+        SignatureScheme::RSA_PSS_SHA256,
+        SignatureScheme::RSA_PSS_SHA384,
+        SignatureScheme::RSA_PSS_SHA512,
+        SignatureScheme::RSA_PKCS1_SHA256,
+        SignatureScheme::RSA_PKCS1_SHA384,
+        SignatureScheme::RSA_PKCS1_SHA512,
+    ]
+}
 
-impl ServerCertVerifier for MeshCertVerifier {
+/// Server certificate verifier for mesh transport (client-side).
+///
+/// Mesh nodes use self-signed Ed25519 certificates — there is no CA chain
+/// to verify. The TLS handshake itself proves the peer holds the private
+/// key corresponding to the certificate's public key. After the handshake,
+/// the peer's Ed25519 public key is extracted from the certificate and used
+/// as their mesh [`Identity`].
+///
+/// # Security model
+///
+/// The TLS handshake proves key possession. The extracted identity is then
+/// bound to protocol-level messages via sender-TLS binding (Task 1c).
+///
+/// TODO: Verify the self-signed certificate's signature (i.e., that the
+/// cert's signature over its TBS data is valid using the embedded public
+/// key). This would reject malformed/forged certs at the TLS layer rather
+/// than relying solely on the handshake proof-of-possession.
+#[derive(Debug)]
+struct MeshServerCertVerifier;
+
+impl ServerCertVerifier for MeshServerCertVerifier {
     fn verify_server_cert(
         &self,
-        _end_entity: &CertificateDer<'_>,
+        end_entity: &CertificateDer<'_>,
         _intermediates: &[CertificateDer<'_>],
         _server_name: &ServerName<'_>,
         _ocsp_response: &[u8],
         _now: UnixTime,
     ) -> std::result::Result<ServerCertVerified, RustlsError> {
-        // We skip PKI verification — mesh nodes use self-signed certs.
-        // The TLS handshake itself proves the peer holds the cert's private
-        // key. We extract the Ed25519 public key from the cert after
-        // connection and verify it matches the sender Identity in messages.
+        // Verify the certificate contains an Ed25519 public key.
+        // We don't verify the self-signed signature here (the TLS handshake
+        // proves key possession), but we reject certs without an extractable
+        // Ed25519 key since they can't be bound to a mesh identity.
+        if extract_ed25519_pubkey_from_cert_der(end_entity.as_ref()).is_none() {
+            return Err(RustlsError::InvalidCertificate(
+                rustls::CertificateError::BadEncoding,
+            ));
+        }
         Ok(ServerCertVerified::assertion())
     }
 
     fn verify_tls12_signature(
         &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
     ) -> std::result::Result<HandshakeSignatureValid, RustlsError> {
-        Ok(HandshakeSignatureValid::assertion())
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
         &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
     ) -> std::result::Result<HandshakeSignatureValid, RustlsError> {
-        Ok(HandshakeSignatureValid::assertion())
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
     }
 
     fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![
-            SignatureScheme::ED25519,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-        ]
+        supported_schemes()
+    }
+}
+
+/// Client certificate verifier for mesh transport (server-side).
+///
+/// Enables mutual TLS so the server can extract the client's mesh
+/// [`Identity`] from their TLS certificate. Uses the same permissive
+/// verification model as [`MeshServerCertVerifier`] — we accept any
+/// self-signed cert with an extractable Ed25519 key.
+///
+/// Client auth is mandatory: every mesh peer MUST present a certificate
+/// so its identity can be verified via sender-TLS binding.
+#[derive(Debug)]
+struct MeshClientCertVerifier;
+
+impl rustls::server::danger::ClientCertVerifier for MeshClientCertVerifier {
+    fn offer_client_auth(&self) -> bool {
+        true
+    }
+
+    fn client_auth_mandatory(&self) -> bool {
+        true
+    }
+
+    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+        // No CA hints — mesh nodes use self-signed certs, not a PKI.
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _now: UnixTime,
+    ) -> std::result::Result<ClientCertVerified, RustlsError> {
+        // Ensure we can extract an Ed25519 key, which proves this is a
+        // valid mesh identity cert.
+        if extract_ed25519_pubkey_from_cert_der(end_entity.as_ref()).is_none() {
+            return Err(RustlsError::InvalidCertificate(
+                rustls::CertificateError::BadEncoding,
+            ));
+        }
+        Ok(ClientCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, RustlsError> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, RustlsError> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        supported_schemes()
     }
 }
 
@@ -148,13 +262,17 @@ pub fn generate_self_signed_cert(
     Ok((vec![cert_der], key_der))
 }
 
-/// Build a rustls [`ServerConfig`] for mesh transport.
+/// Build a rustls [`ServerConfig`] for mesh transport with mutual TLS.
+///
+/// The server presents its own certificate and requests (but does not require)
+/// client certificates. This enables the server to extract the client's mesh
+/// [`Identity`] from their TLS cert after the handshake.
 pub fn server_crypto_config(
     cert_chain: Vec<CertificateDer<'static>>,
     key: PrivateKeyDer<'static>,
 ) -> Result<Arc<rustls::ServerConfig>> {
     let mut config = rustls::ServerConfig::builder()
-        .with_no_client_auth()
+        .with_client_cert_verifier(Arc::new(MeshClientCertVerifier))
         .with_single_cert(cert_chain, key)
         .map_err(|e| TransportError::Tls(format!("server config: {e}")))?;
 
@@ -162,15 +280,20 @@ pub fn server_crypto_config(
     Ok(Arc::new(config))
 }
 
-/// Build a rustls [`ClientConfig`] for mesh transport.
+/// Build a rustls [`ClientConfig`] for mesh transport with mutual TLS.
 ///
-/// Uses [`MeshCertVerifier`] which accepts self-signed certs (no PKI).
-/// The TLS handshake still proves the peer holds the cert's private key.
-pub fn client_crypto_config() -> Result<Arc<rustls::ClientConfig>> {
+/// Uses [`MeshServerCertVerifier`] which accepts self-signed certs (no PKI).
+/// The client presents its own certificate so the server can extract the
+/// client's mesh [`Identity`] from the TLS handshake.
+pub fn client_crypto_config(
+    cert_chain: Vec<CertificateDer<'static>>,
+    key: PrivateKeyDer<'static>,
+) -> Result<Arc<rustls::ClientConfig>> {
     let mut config = rustls::ClientConfig::builder()
         .dangerous()
-        .with_custom_certificate_verifier(Arc::new(MeshCertVerifier))
-        .with_no_client_auth();
+        .with_custom_certificate_verifier(Arc::new(MeshServerCertVerifier))
+        .with_client_auth_cert(cert_chain, key)
+        .map_err(|e| TransportError::Tls(format!("client config: {e}")))?;
 
     config.alpn_protocols = vec![MESH_ALPN.to_vec()];
     Ok(Arc::new(config))

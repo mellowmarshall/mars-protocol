@@ -66,9 +66,10 @@ pub struct Descriptor {
 impl Descriptor {
     /// Compute the content hash for a descriptor's fields (Section 2.1).
     ///
-    /// Builds an explicit CBOR map with lexicographically sorted string keys
-    /// and precisely typed values, then hashes with BLAKE3. This canonical
-    /// form is used ONLY for content-hashing — NOT for network serialization.
+    /// Builds an explicit CBOR map with keys sorted per RFC 8949 §4.2.1
+    /// (deterministic encoding) and precisely typed values, then hashes
+    /// with BLAKE3. This canonical form is used ONLY for content-hashing
+    /// — NOT for network serialization.
     /// See PROTOCOL.md Appendix C for the specification and test vectors.
     #[allow(clippy::too_many_arguments)]
     pub fn compute_id(
@@ -96,9 +97,14 @@ impl Descriptor {
 
     /// Produce the canonical CBOR bytes for content-hashing.
     ///
-    /// The output is a CBOR map (major type 5) with string keys in
-    /// lexicographic order. Each value uses the exact CBOR type specified
-    /// in the protocol (see Appendix C).
+    /// The output is a CBOR map (major type 5) with keys sorted per
+    /// RFC 8949 §4.2.1 (deterministic encoding): bytewise lexicographic
+    /// order of the CBOR-encoded keys. For text string keys this means
+    /// shorter keys first (smaller CBOR length prefix), then lexicographic
+    /// within the same length.
+    ///
+    /// Order: ttl(3), topic(5), payload(7), sequence(8), publisher(9),
+    ///        timestamp(9), schema_hash(11), routing_keys(12)
     #[allow(clippy::too_many_arguments)]
     fn canonical_cbor_bytes(
         schema_hash: &Hash,
@@ -111,48 +117,70 @@ impl Descriptor {
         routing_keys: &[Hash],
     ) -> Vec<u8> {
         use ciborium::Value;
-        use std::collections::BTreeMap;
 
-        let mut map = BTreeMap::new();
-        map.insert("payload", Value::Bytes(payload.to_vec()));
-        map.insert(
-            "publisher",
-            Value::Array(vec![
-                Value::Integer(publisher.algorithm.into()),
-                Value::Bytes(publisher.public_key.clone()),
-            ]),
-        );
-        map.insert(
-            "routing_keys",
-            Value::Array(
-                routing_keys
-                    .iter()
-                    .map(|h| {
-                        Value::Array(vec![
-                            Value::Integer(h.algorithm.into()),
-                            Value::Bytes(h.digest.clone()),
-                        ])
-                    })
-                    .collect(),
+        // RFC 8949 §4.2.1 canonical order: sort by encoded key bytes.
+        // For CBOR text strings, shorter keys sort first (length byte is
+        // smaller), then lexicographic within the same length.
+        let entries = vec![
+            // "ttl" (3 chars)
+            (
+                Value::Text("ttl".into()),
+                Value::Integer(ttl.into()),
             ),
-        );
-        map.insert(
-            "schema_hash",
-            Value::Array(vec![
-                Value::Integer(schema_hash.algorithm.into()),
-                Value::Bytes(schema_hash.digest.clone()),
-            ]),
-        );
-        map.insert("sequence", Value::Integer(sequence.into()));
-        map.insert("timestamp", Value::Integer(timestamp.into()));
-        map.insert("topic", Value::Text(topic.to_string()));
-        map.insert("ttl", Value::Integer(ttl.into()));
+            // "topic" (5 chars)
+            (
+                Value::Text("topic".into()),
+                Value::Text(topic.to_string()),
+            ),
+            // "payload" (7 chars)
+            (
+                Value::Text("payload".into()),
+                Value::Bytes(payload.to_vec()),
+            ),
+            // "sequence" (8 chars)
+            (
+                Value::Text("sequence".into()),
+                Value::Integer(sequence.into()),
+            ),
+            // "publisher" (9 chars) — 'p' < 't'
+            (
+                Value::Text("publisher".into()),
+                Value::Array(vec![
+                    Value::Integer(publisher.algorithm.into()),
+                    Value::Bytes(publisher.public_key.clone()),
+                ]),
+            ),
+            // "timestamp" (9 chars) — 't' > 'p'
+            (
+                Value::Text("timestamp".into()),
+                Value::Integer(timestamp.into()),
+            ),
+            // "schema_hash" (11 chars)
+            (
+                Value::Text("schema_hash".into()),
+                Value::Array(vec![
+                    Value::Integer(schema_hash.algorithm.into()),
+                    Value::Bytes(schema_hash.digest.clone()),
+                ]),
+            ),
+            // "routing_keys" (12 chars)
+            (
+                Value::Text("routing_keys".into()),
+                Value::Array(
+                    routing_keys
+                        .iter()
+                        .map(|h| {
+                            Value::Array(vec![
+                                Value::Integer(h.algorithm.into()),
+                                Value::Bytes(h.digest.clone()),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ];
 
-        let cbor_value = Value::Map(
-            map.into_iter()
-                .map(|(k, v)| (Value::Text(k.into()), v))
-                .collect(),
-        );
+        let cbor_value = Value::Map(entries);
 
         let mut buf = Vec::new();
         ciborium::into_writer(&cbor_value, &mut buf)
@@ -809,11 +837,11 @@ mod test_vectors {
         // the PROTOCOL.md appendix MUST be updated to match.
         assert_eq!(
             cbor_hex,
-            "a8677061796c6f61644c74657374207061796c6f6164697075626c6973686572820158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c6c726f7574696e675f6b6579738182035820235ad34c1ac90b981ab12865b8d4d5d4d18708fc614cec7fd1d01fad82c6b69a6b736368656d615f6861736882035820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3306873657175656e6365016974696d657374616d701b00060a24181e400065746f7069636a746573742d746f7069636374746c190e10",
+            "a86374746c190e1065746f7069636a746573742d746f706963677061796c6f61644c74657374207061796c6f61646873657175656e636501697075626c6973686572820158208a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c6974696d657374616d701b00060a24181e40006b736368656d615f6861736882035820bd40bb81f07d1e149cc709b581a4c52af445f6a203d7ab32e284a0b3ffcfb3306c726f7574696e675f6b6579738182035820235ad34c1ac90b981ab12865b8d4d5d4d18708fc614cec7fd1d01fad82c6b69a",
             "CBOR hex mismatch — canonical serialization has changed!"
         );
         assert_eq!(
-            id_hex, "a38b23b474083f46592c4584728addb830f35e98434a0010d3d0b4e63c2f0581",
+            id_hex, "816352037155f3a93b6ffa637bcfffc26f2af5ea1589c0aa6bd5afb1183acb6b",
             "BLAKE3 descriptor ID mismatch — canonical serialization has changed!"
         );
 

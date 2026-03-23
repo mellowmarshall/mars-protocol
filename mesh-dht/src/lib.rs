@@ -11,7 +11,7 @@ pub mod storage;
 pub mod transport;
 
 pub use hooks::{NoOpHook, ProtocolHook};
-pub use node::{DhtConfig, DhtNode};
+pub use node::{DhtConfig, DhtNode, verify_sender_binding};
 pub use routing::RoutingTable;
 pub use storage::{DescriptorStorage, DescriptorStore, StoreError};
 pub use transport::{Transport, TransportError};
