@@ -11,3 +11,4 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+ciborium = { workspace = true }

@@ -17,7 +17,7 @@ use mesh_core::{Descriptor, Frame, Hash};
 
 use crate::distance::distance_cmp;
 use crate::hooks::ProtocolHook;
-use crate::routing::{K, RoutingTable};
+use crate::routing::{AddNodeResult, K, RoutingTable};
 use crate::storage::{DescriptorStorage, DescriptorStore};
 use crate::transport::{Transport, TransportError};
 
@@ -150,11 +150,7 @@ impl<S: DescriptorStorage> DhtNode<S> {
     /// Handle a PING request (Section 3.4).
     pub fn handle_ping(&mut self, ping: &Ping) -> Pong {
         // Update routing table with sender info
-        self.routing_table.add_node(NodeInfo {
-            identity: ping.sender.clone(),
-            addr: ping.sender_addr.clone(),
-            last_seen: Self::now_micros(),
-        });
+        self.update_routing_table(&ping.sender, &ping.sender_addr);
 
         Pong {
             sender: self.identity.clone(),
@@ -334,7 +330,8 @@ impl<S: DescriptorStorage> DhtNode<S> {
                             if let Some(nodes) = result.nodes {
                                 // Add new nodes to routing table and candidates
                                 for n in nodes {
-                                    self.routing_table.add_node(n.clone());
+                                    // TODO: async ping challenge for BucketFull
+                                    let _ = self.routing_table.add_node(n.clone());
                                     new_nodes.push(n);
                                 }
                             }
@@ -397,7 +394,8 @@ impl<S: DescriptorStorage> DhtNode<S> {
                         && let Ok(result) = from_cbor::<FindNodeResult>(&resp.body)
                     {
                         for node in result.nodes {
-                            self.routing_table.add_node(node);
+                            // TODO: async ping challenge for BucketFull
+                            let _ = self.routing_table.add_node(node);
                             discovered += 1;
                         }
                     }
@@ -416,12 +414,27 @@ impl<S: DescriptorStorage> DhtNode<S> {
     ///
     /// All request messages now carry `sender_addr`, so every incoming message
     /// contributes to routing table freshness — standard Kademlia behavior.
+    ///
+    /// When the bucket is full, we conservatively keep the existing verified
+    /// LRS node and discard the candidate. This is the safe default — a live
+    /// node we've already communicated with is more trustworthy than an
+    /// unknown newcomer (Sybil resistance, Section 4.3).
     fn update_routing_table(&mut self, sender: &Identity, sender_addr: &NodeAddr) {
-        self.routing_table.add_node(NodeInfo {
+        let result = self.routing_table.add_node(NodeInfo {
             identity: sender.clone(),
             addr: sender_addr.clone(),
             last_seen: Self::now_micros(),
         });
+        if let AddNodeResult::BucketFull { lrs, .. } = result {
+            // TODO: async ping challenge — send PING to lrs and call
+            // resolve_challenge() based on response. For now, keep the
+            // existing verified LRS node (conservative Sybil defense).
+            tracing::debug!(
+                lrs_id = %lrs.identity.did(),
+                sender_id = %sender.did(),
+                "bucket full: keeping existing LRS node, discarding new candidate"
+            );
+        }
     }
 
     fn now_micros() -> u64 {
@@ -638,7 +651,7 @@ mod tests {
         // Add some nodes to the routing table
         for i in 0..5 {
             let kp = Keypair::generate();
-            node.routing_table.add_node(NodeInfo {
+            let _ = node.routing_table.add_node(NodeInfo {
                 identity: kp.identity(),
                 addr: NodeAddr {
                     protocol: "quic".into(),
@@ -709,7 +722,7 @@ mod tests {
         // Add nodes but no descriptors
         for i in 0..3 {
             let kp = Keypair::generate();
-            node.routing_table.add_node(NodeInfo {
+            let _ = node.routing_table.add_node(NodeInfo {
                 identity: kp.identity(),
                 addr: NodeAddr {
                     protocol: "quic".into(),
@@ -790,7 +803,7 @@ mod tests {
         let mut seed = make_node(5000);
         for i in 0..5 {
             let kp = Keypair::generate();
-            seed.routing_table.add_node(NodeInfo {
+            let _ = seed.routing_table.add_node(NodeInfo {
                 identity: kp.identity(),
                 addr: NodeAddr {
                     protocol: "quic".into(),
@@ -836,7 +849,7 @@ mod tests {
 
         // Our node knows about the holder
         let mut node = make_node(4435);
-        node.routing_table.add_node(NodeInfo {
+        let _ = node.routing_table.add_node(NodeInfo {
             identity: holder_identity,
             addr: holder_addr,
             last_seen: now,
@@ -873,7 +886,7 @@ mod tests {
 
         // Node A knows about node B but doesn't have the descriptor
         let mut node_a = make_node(5003);
-        node_a.routing_table.add_node(NodeInfo {
+        let _ = node_a.routing_table.add_node(NodeInfo {
             identity: node_b_identity.clone(),
             addr: node_b_addr.clone(),
             last_seen: now,
@@ -886,7 +899,7 @@ mod tests {
 
         // Our node only knows about node A
         let mut our_node = make_node(4436);
-        our_node.routing_table.add_node(NodeInfo {
+        let _ = our_node.routing_table.add_node(NodeInfo {
             identity: node_a_identity,
             addr: node_a_addr,
             last_seen: now,

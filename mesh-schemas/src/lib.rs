@@ -34,6 +34,14 @@ pub static ROUTING_KEY_STORAGE: LazyLock<Hash> = LazyLock::new(|| routing_key("s
 pub static ROUTING_KEY_INFERENCE: LazyLock<Hash> =
     LazyLock::new(|| routing_key("compute/inference"));
 
+/// Routing key for the `infrastructure` namespace.
+pub static ROUTING_KEY_INFRASTRUCTURE: LazyLock<Hash> =
+    LazyLock::new(|| routing_key("infrastructure"));
+
+/// Routing key for `infrastructure/hub` — hub peering discovery.
+pub static ROUTING_KEY_INFRASTRUCTURE_HUB: LazyLock<Hash> =
+    LazyLock::new(|| routing_key("infrastructure/hub"));
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,6 +57,8 @@ mod tests {
     fn routing_key_constants_are_unique() {
         assert_ne!(*ROUTING_KEY_COMPUTE, *ROUTING_KEY_STORAGE);
         assert_ne!(*ROUTING_KEY_COMPUTE, *ROUTING_KEY_INFERENCE);
+        assert_ne!(*ROUTING_KEY_INFRASTRUCTURE, *ROUTING_KEY_INFRASTRUCTURE_HUB);
+        assert_ne!(*ROUTING_KEY_INFRASTRUCTURE, *ROUTING_KEY_COMPUTE);
     }
 
     #[test]
@@ -56,5 +66,10 @@ mod tests {
         assert_eq!(*ROUTING_KEY_COMPUTE, routing_key("compute"));
         assert_eq!(*ROUTING_KEY_STORAGE, routing_key("storage"));
         assert_eq!(*ROUTING_KEY_INFERENCE, routing_key("compute/inference"));
+        assert_eq!(*ROUTING_KEY_INFRASTRUCTURE, routing_key("infrastructure"));
+        assert_eq!(
+            *ROUTING_KEY_INFRASTRUCTURE_HUB,
+            routing_key("infrastructure/hub")
+        );
     }
 }

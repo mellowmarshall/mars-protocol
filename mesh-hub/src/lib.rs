@@ -8,6 +8,7 @@
 pub mod admin;
 pub mod config;
 pub mod hooks;
+pub mod peering;
 pub mod policy;
 pub mod storage;
 pub mod tenant;
@@ -29,6 +30,7 @@ use mesh_transport::endpoint::MeshEndpoint;
 use crate::admin::{AdminState, admin_router};
 use crate::config::HubConfig;
 use crate::hooks::HubProtocolHook;
+use crate::peering::{HubMetadata, PeerManager};
 use crate::policy::PolicyEngine;
 use crate::storage::CachedStorage;
 use crate::storage::redb::RedbStorage;
@@ -44,6 +46,8 @@ pub struct HubRuntime {
     dht_node: Arc<Mutex<HubDhtNode>>,
     endpoint: MeshEndpoint,
     tenant_manager: Arc<Mutex<TenantManager>>,
+    /// Peer manager for hub-to-hub peering (None if peering is disabled).
+    peer_manager: Option<Arc<tokio::sync::Mutex<PeerManager>>>,
 }
 
 impl HubRuntime {
@@ -92,6 +96,60 @@ impl HubRuntime {
                 }
             }
         });
+
+        // Spawn peering background tasks (if enabled)
+        if let Some(ref peer_manager) = self.peer_manager {
+            let pm = peer_manager.clone();
+            let dht = self.dht_node.clone();
+
+            // Publish self-advertisement on startup
+            peering::publish_self_advertisement(&dht, &pm);
+
+            // Self-advertisement re-publish task (every TTL/2 = 1800s)
+            let pm_adv = pm.clone();
+            let dht_adv = dht.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(1800)).await;
+                    peering::publish_self_advertisement(&dht_adv, &pm_adv);
+                }
+            });
+
+            // Discovery task: run on startup, then every 5 minutes
+            let pm_disc = pm.clone();
+            let dht_disc = dht.clone();
+            tokio::spawn(async move {
+                // Initial discovery
+                peering::run_discovery(&dht_disc, &pm_disc).await;
+                loop {
+                    tokio::time::sleep(Duration::from_secs(300)).await;
+                    peering::run_discovery(&dht_disc, &pm_disc).await;
+                }
+            });
+
+            // Gossip task
+            let gossip_interval = self.config.peering.gossip_interval_secs;
+            let pm_gossip = pm.clone();
+            let dht_gossip = dht.clone();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(gossip_interval)).await;
+                    peering::run_gossip_round(&dht_gossip, &pm_gossip).await;
+                }
+            });
+
+            // Health check task
+            let health_interval = self.config.peering.health_check_interval_secs;
+            let pm_health = pm;
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(Duration::from_secs(health_interval)).await;
+                    peering::run_health_check(&pm_health).await;
+                }
+            });
+
+            tracing::info!("hub peering enabled");
+        }
 
         tracing::info!(
             did = %self.hub_identity.did(),
@@ -171,6 +229,29 @@ impl HubBuilder {
             protocol: "quic".into(),
             address: listen_addr.to_string(),
         };
+
+        // Create PeerManager if peering is enabled (before moving keypair)
+        let peer_manager = if self.config.peering.enabled {
+            let peering_keypair = Keypair::from_bytes(&self.keypair.secret_bytes());
+            let peering_endpoint =
+                MeshEndpoint::new("0.0.0.0:0".parse().unwrap(), &peering_keypair)?;
+            let hub_metadata = HubMetadata {
+                max_descriptors: self.config.peering.max_descriptors,
+                regions: self.config.peering.regions.clone(),
+                endpoint: format!("quic://{}", listen_addr),
+            };
+            Some(Arc::new(tokio::sync::Mutex::new(PeerManager::new(
+                hub_identity.clone(),
+                peering_keypair,
+                node_addr.clone(),
+                peering_endpoint,
+                hub_metadata,
+                self.config.peering.max_peers,
+            ))))
+        } else {
+            None
+        };
+
         let dht_node =
             DhtNode::with_store(self.keypair, node_addr, DhtConfig::default(), cached_storage)
                 .with_hooks(hook);
@@ -182,6 +263,7 @@ impl HubBuilder {
             dht_node,
             endpoint,
             tenant_manager,
+            peer_manager,
         })
     }
 }

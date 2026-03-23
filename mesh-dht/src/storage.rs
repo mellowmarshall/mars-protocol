@@ -1,12 +1,14 @@
 //! Descriptor storage — in-memory store keyed by routing key (Section 4).
 //!
 //! Stores descriptors with deduplication by `publisher + schema_hash + topic`,
-//! sequence-based replacement, TTL expiry, and per-publisher rate limiting.
+//! sequence-based replacement, TTL expiry, per-publisher rate limiting,
+//! revocation enforcement, and key-rotation tracking.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use mesh_core::message::FilterSet;
+use mesh_core::schema::{SCHEMA_HASH_CORE_KEY_ROTATION, SCHEMA_HASH_CORE_REVOCATION};
 use mesh_core::{Descriptor, Hash, Identity};
 
 /// Maximum STORE operations per publisher per minute.
@@ -101,9 +103,13 @@ pub struct DescriptorStore {
     sequences: HashMap<DedupKey, u64>,
     /// Per-publisher rate limiter.
     rate_limiter: RateLimiter,
+    /// Set of revoked descriptor IDs (Section 7 — revocation enforcement).
+    revoked: HashSet<Hash>,
+    /// Key rotation map: old_identity bytes → (new_identity, rotation_seq).
+    /// Tracks identity succession for key-rotation descriptors.
+    pub rotations: HashMap<Vec<u8>, (Identity, u64)>,
 }
 
-/// Errors from storage operations.
 /// Errors from descriptor storage operations.
 #[derive(Debug, thiserror::Error)]
 pub enum StoreError {
@@ -116,6 +122,15 @@ pub enum StoreError {
     /// Publisher exceeded the per-identity rate limit.
     #[error("rate limited: publisher exceeded {limit} stores per minute")]
     RateLimited { limit: usize },
+    /// Revocation rejected: the revoker is not the same publisher as the target.
+    #[error("revocation rejected: publisher mismatch")]
+    RevocationPublisherMismatch,
+    /// Key rotation rejected: stale rotation sequence.
+    #[error("stale key rotation: seq {received} <= current {current}")]
+    StaleRotation { received: u64, current: u64 },
+    /// Key rotation rejected: conflicting rotation for same old identity and seq.
+    #[error("key rotation fork detected: conflicting new_identity for same seq")]
+    RotationForkDetected,
 }
 
 impl DescriptorStore {
@@ -125,6 +140,8 @@ impl DescriptorStore {
             store: HashMap::new(),
             sequences: HashMap::new(),
             rate_limiter: RateLimiter::default(),
+            revoked: HashSet::new(),
+            rotations: HashMap::new(),
         }
     }
 
@@ -196,6 +213,175 @@ impl DescriptorStore {
                 .push(descriptor.clone());
         }
 
+        // Handle revocation descriptors (Section 7)
+        if descriptor.schema_hash == *SCHEMA_HASH_CORE_REVOCATION {
+            self.process_revocation(&descriptor)?;
+        }
+
+        // Handle key-rotation descriptors
+        if descriptor.schema_hash == *SCHEMA_HASH_CORE_KEY_ROTATION {
+            self.process_key_rotation(&descriptor)?;
+        }
+
+        Ok(())
+    }
+
+    /// Process a revocation descriptor: verify publisher authority and revoke the target.
+    fn process_revocation(&mut self, revocation: &Descriptor) -> Result<(), StoreError> {
+        // Parse the CBOR payload to extract target_id
+        let value: ciborium::Value = ciborium::from_reader(revocation.payload.as_slice())
+            .map_err(|e| StoreError::ValidationFailed(format!("invalid revocation payload: {e}")))?;
+
+        let target_id_bytes = value
+            .as_map()
+            .and_then(|m| {
+                m.iter().find_map(|(k, v)| {
+                    if k.as_text() == Some("target_id") {
+                        v.as_bytes().cloned()
+                    } else {
+                        None
+                    }
+                })
+            })
+            .ok_or_else(|| {
+                StoreError::ValidationFailed("revocation payload missing target_id".into())
+            })?;
+
+        // Reconstruct the target descriptor ID hash from the bytes.
+        // The bytes should be [algorithm, ...digest].
+        if target_id_bytes.len() < 2 {
+            return Err(StoreError::ValidationFailed(
+                "target_id too short".into(),
+            ));
+        }
+        let target_id = Hash {
+            algorithm: target_id_bytes[0],
+            digest: target_id_bytes[1..].to_vec(),
+        };
+
+        // Look up the target descriptor to verify publisher match
+        let target_desc = self
+            .store
+            .values()
+            .flat_map(|descs| descs.iter())
+            .find(|d| d.id == target_id);
+
+        if let Some(target) = target_desc {
+            // Verify the revocation publisher matches the target publisher
+            if revocation.publisher != target.publisher {
+                // Remove the revocation descriptor we just stored (it's invalid)
+                for descriptors in self.store.values_mut() {
+                    descriptors.retain(|d| d.id != revocation.id);
+                }
+                return Err(StoreError::RevocationPublisherMismatch);
+            }
+
+            // Add target to revoked set and remove from routing key index
+            self.revoked.insert(target_id.clone());
+            for descriptors in self.store.values_mut() {
+                descriptors.retain(|d| d.id != target_id);
+            }
+            // Clean up empty routing key entries
+            self.store.retain(|_, v| !v.is_empty());
+        }
+        // If target not found, still store the revocation (it may arrive
+        // before the target due to replication ordering) and add to revoked set
+        // so the target will be filtered when it arrives later.
+        self.revoked.insert(target_id);
+
+        Ok(())
+    }
+
+    /// Process a key-rotation descriptor: validate and track identity succession.
+    fn process_key_rotation(&mut self, rotation: &Descriptor) -> Result<(), StoreError> {
+        // Parse the CBOR payload
+        let value: ciborium::Value = ciborium::from_reader(rotation.payload.as_slice())
+            .map_err(|e| {
+                StoreError::ValidationFailed(format!("invalid key-rotation payload: {e}"))
+            })?;
+
+        let map = value.as_map().ok_or_else(|| {
+            StoreError::ValidationFailed("key-rotation payload is not a map".into())
+        })?;
+
+        // Extract fields
+        let old_identity_bytes = map
+            .iter()
+            .find_map(|(k, v)| {
+                if k.as_text() == Some("old_identity") {
+                    v.as_bytes().cloned()
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                StoreError::ValidationFailed("key-rotation missing old_identity".into())
+            })?;
+
+        let new_identity_bytes = map
+            .iter()
+            .find_map(|(k, v)| {
+                if k.as_text() == Some("new_identity") {
+                    v.as_bytes().cloned()
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                StoreError::ValidationFailed("key-rotation missing new_identity".into())
+            })?;
+
+        let rotation_seq = map
+            .iter()
+            .find_map(|(k, v)| {
+                if k.as_text() == Some("rotation_seq") {
+                    v.as_integer()
+                        .and_then(|i| u64::try_from(i).ok())
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                StoreError::ValidationFailed("key-rotation missing rotation_seq".into())
+            })?;
+
+        // Reconstruct new_identity from bytes: [algorithm, ...public_key]
+        if new_identity_bytes.len() < 2 {
+            return Err(StoreError::ValidationFailed(
+                "new_identity too short".into(),
+            ));
+        }
+        let new_identity = Identity {
+            algorithm: new_identity_bytes[0],
+            public_key: new_identity_bytes[1..].to_vec(),
+        };
+
+        // Check rotation_seq against previous rotation for same old_identity
+        if let Some((existing_identity, existing_seq)) = self.rotations.get(&old_identity_bytes) {
+            if rotation_seq == *existing_seq && *existing_identity != new_identity {
+                // Same seq, different new_identity — fork detection
+                for descriptors in self.store.values_mut() {
+                    descriptors.retain(|d| d.id != rotation.id);
+                }
+                return Err(StoreError::RotationForkDetected);
+            }
+            if rotation_seq < *existing_seq {
+                // Stale rotation
+                for descriptors in self.store.values_mut() {
+                    descriptors.retain(|d| d.id != rotation.id);
+                }
+                return Err(StoreError::StaleRotation {
+                    received: rotation_seq,
+                    current: *existing_seq,
+                });
+            }
+            // rotation_seq > existing_seq, or same seq+identity (idempotent) — allow
+        }
+
+        // Store the rotation mapping
+        self.rotations
+            .insert(old_identity_bytes, (new_identity, rotation_seq));
+
         Ok(())
     }
 
@@ -225,6 +411,10 @@ impl DescriptorStore {
         descriptors
             .iter()
             .filter(|d| {
+                // Filter revoked descriptors
+                if self.revoked.contains(&d.id) {
+                    return false;
+                }
                 // Filter expired descriptors using effective TTL
                 let effective_start = std::cmp::min(d.timestamp, now_micros);
                 let ttl_micros = u64::from(d.ttl) * 1_000_000;
@@ -777,5 +967,330 @@ mod tests {
         )
         .unwrap();
         assert!(store.store_descriptor_at(desc, now).is_ok());
+    }
+
+    // ── Revocation Tests (B2) ──
+
+    /// Helper: build a CBOR revocation payload with target_id.
+    fn make_revocation_payload(target_id: &Hash) -> Vec<u8> {
+        use ciborium::Value;
+        let mut id_bytes = vec![target_id.algorithm];
+        id_bytes.extend_from_slice(&target_id.digest);
+        let map = Value::Map(vec![(
+            Value::Text("target_id".into()),
+            Value::Bytes(id_bytes),
+        )]);
+        let mut buf = Vec::new();
+        ciborium::into_writer(&map, &mut buf).unwrap();
+        buf
+    }
+
+    #[test]
+    fn revocation_removes_target() {
+        let mut store = DescriptorStore::new();
+        let kp = Keypair::generate();
+        let rk = routing_key("compute");
+        let now = now_micros();
+
+        // Store a normal descriptor
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "topic".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let target_id = desc.id.clone();
+        store.store_descriptor_at(desc, now).unwrap();
+        assert_eq!(store.get_descriptors_at(&rk, None, now).len(), 1);
+
+        // Store a revocation for it (same publisher)
+        let revocation_payload = make_revocation_payload(&target_id);
+        let revocation = Descriptor::create(
+            &kp,
+            SCHEMA_HASH_CORE_REVOCATION.clone(),
+            "revoke-topic".into(),
+            revocation_payload,
+            now,
+            2,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        store.store_descriptor_at(revocation.clone(), now).unwrap();
+
+        // The revoked descriptor should not be returned
+        let results = store.get_descriptors_at(&rk, None, now);
+        assert!(
+            !results.iter().any(|d| d.id == target_id),
+            "revoked descriptor should not be returned"
+        );
+
+        // The revocation descriptor itself should still be retrievable
+        assert!(
+            results.iter().any(|d| d.id == revocation.id),
+            "revocation descriptor should be retrievable"
+        );
+    }
+
+    #[test]
+    fn revocation_by_wrong_publisher_rejected() {
+        let mut store = DescriptorStore::new();
+        let kp_owner = Keypair::generate();
+        let kp_attacker = Keypair::generate();
+        let rk = routing_key("compute");
+        let now = now_micros();
+
+        // Store a normal descriptor from kp_owner
+        let desc = Descriptor::create(
+            &kp_owner,
+            schema_hash("core/capability"),
+            "topic".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let target_id = desc.id.clone();
+        store.store_descriptor_at(desc, now).unwrap();
+
+        // Attacker tries to revoke it
+        let revocation_payload = make_revocation_payload(&target_id);
+        let revocation = Descriptor::create(
+            &kp_attacker,
+            SCHEMA_HASH_CORE_REVOCATION.clone(),
+            "revoke-topic".into(),
+            revocation_payload,
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let result = store.store_descriptor_at(revocation, now);
+        assert!(
+            matches!(result, Err(StoreError::RevocationPublisherMismatch)),
+            "revocation by wrong publisher should be rejected"
+        );
+
+        // Original descriptor should still be available
+        let results = store.get_descriptors_at(&rk, None, now);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, target_id);
+    }
+
+    #[test]
+    fn revocation_descriptor_itself_stored() {
+        let mut store = DescriptorStore::new();
+        let kp = Keypair::generate();
+        let rk = routing_key("compute");
+        let now = now_micros();
+
+        // Store target
+        let desc = Descriptor::create(
+            &kp,
+            schema_hash("core/capability"),
+            "topic".into(),
+            b"payload".to_vec(),
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let target_id = desc.id.clone();
+        store.store_descriptor_at(desc, now).unwrap();
+
+        // Revoke
+        let revocation_payload = make_revocation_payload(&target_id);
+        let revocation = Descriptor::create(
+            &kp,
+            SCHEMA_HASH_CORE_REVOCATION.clone(),
+            "revoke-topic".into(),
+            revocation_payload,
+            now,
+            2,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let rev_id = revocation.id.clone();
+        store.store_descriptor_at(revocation, now).unwrap();
+
+        // The revocation descriptor itself should be stored and retrievable
+        let results = store.get_descriptors_at(&rk, None, now);
+        assert!(results.iter().any(|d| d.id == rev_id));
+    }
+
+    // ── Key Rotation Tests (B3) ──
+
+    /// Helper: build a CBOR key-rotation payload.
+    fn make_key_rotation_payload(
+        old_identity: &Identity,
+        new_identity: &Identity,
+        rotation_seq: u64,
+    ) -> Vec<u8> {
+        use ciborium::Value;
+        let mut old_bytes = vec![old_identity.algorithm];
+        old_bytes.extend_from_slice(&old_identity.public_key);
+        let mut new_bytes = vec![new_identity.algorithm];
+        new_bytes.extend_from_slice(&new_identity.public_key);
+        let map = Value::Map(vec![
+            (
+                Value::Text("old_identity".into()),
+                Value::Bytes(old_bytes),
+            ),
+            (
+                Value::Text("new_identity".into()),
+                Value::Bytes(new_bytes),
+            ),
+            (
+                Value::Text("rotation_seq".into()),
+                Value::Integer(rotation_seq.into()),
+            ),
+        ]);
+        let mut buf = Vec::new();
+        ciborium::into_writer(&map, &mut buf).unwrap();
+        buf
+    }
+
+    fn identity_bytes_for(id: &Identity) -> Vec<u8> {
+        let mut bytes = vec![id.algorithm];
+        bytes.extend_from_slice(&id.public_key);
+        bytes
+    }
+
+    #[test]
+    fn key_rotation_updates_map() {
+        let mut store = DescriptorStore::new();
+        let old_kp = Keypair::generate();
+        let new_kp = Keypair::generate();
+        let rk = routing_key("compute");
+        let now = now_micros();
+
+        let payload =
+            make_key_rotation_payload(&old_kp.identity(), &new_kp.identity(), 1);
+        let rotation_desc = Descriptor::create(
+            &old_kp,
+            SCHEMA_HASH_CORE_KEY_ROTATION.clone(),
+            "rotation".into(),
+            payload,
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        store.store_descriptor_at(rotation_desc, now).unwrap();
+
+        // Verify rotations map was updated
+        let old_bytes = identity_bytes_for(&old_kp.identity());
+        let (new_id, seq) = store.rotations.get(&old_bytes).expect("rotation should be tracked");
+        assert_eq!(*new_id, new_kp.identity());
+        assert_eq!(*seq, 1);
+    }
+
+    #[test]
+    fn key_rotation_stale_seq_rejected() {
+        let mut store = DescriptorStore::new();
+        let old_kp = Keypair::generate();
+        let new_kp1 = Keypair::generate();
+        let new_kp2 = Keypair::generate();
+        let rk = routing_key("compute");
+        let now = now_micros();
+
+        // First rotation at seq 5
+        let payload1 =
+            make_key_rotation_payload(&old_kp.identity(), &new_kp1.identity(), 5);
+        let rot1 = Descriptor::create(
+            &old_kp,
+            SCHEMA_HASH_CORE_KEY_ROTATION.clone(),
+            "rotation-1".into(),
+            payload1,
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        store.store_descriptor_at(rot1, now).unwrap();
+
+        // Try stale rotation at seq 3
+        let payload2 =
+            make_key_rotation_payload(&old_kp.identity(), &new_kp2.identity(), 3);
+        let rot2 = Descriptor::create(
+            &old_kp,
+            SCHEMA_HASH_CORE_KEY_ROTATION.clone(),
+            "rotation-2".into(),
+            payload2,
+            now,
+            2,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let result = store.store_descriptor_at(rot2, now);
+        assert!(
+            matches!(result, Err(StoreError::StaleRotation { .. })),
+            "stale rotation_seq should be rejected"
+        );
+
+        // Original rotation should still be in place
+        let old_bytes = identity_bytes_for(&old_kp.identity());
+        let (new_id, seq) = store.rotations.get(&old_bytes).unwrap();
+        assert_eq!(*new_id, new_kp1.identity());
+        assert_eq!(*seq, 5);
+    }
+
+    #[test]
+    fn key_rotation_fork_detected() {
+        let mut store = DescriptorStore::new();
+        let old_kp = Keypair::generate();
+        let new_kp1 = Keypair::generate();
+        let new_kp2 = Keypair::generate();
+        let rk = routing_key("compute");
+        let now = now_micros();
+
+        // First rotation at seq 1
+        let payload1 =
+            make_key_rotation_payload(&old_kp.identity(), &new_kp1.identity(), 1);
+        let rot1 = Descriptor::create(
+            &old_kp,
+            SCHEMA_HASH_CORE_KEY_ROTATION.clone(),
+            "rotation-1".into(),
+            payload1,
+            now,
+            1,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        store.store_descriptor_at(rot1, now).unwrap();
+
+        // Same seq but different new_identity — fork!
+        let payload2 =
+            make_key_rotation_payload(&old_kp.identity(), &new_kp2.identity(), 1);
+        let rot2 = Descriptor::create(
+            &old_kp,
+            SCHEMA_HASH_CORE_KEY_ROTATION.clone(),
+            "rotation-2".into(),
+            payload2,
+            now,
+            2,
+            3600,
+            vec![rk.clone()],
+        )
+        .unwrap();
+        let result = store.store_descriptor_at(rot2, now);
+        assert!(
+            matches!(result, Err(StoreError::RotationForkDetected)),
+            "fork should be detected when same seq but different new_identity"
+        );
     }
 }

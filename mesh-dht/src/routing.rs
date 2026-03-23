@@ -3,11 +3,31 @@
 //! Each bucket holds up to K=20 `NodeInfo` entries, ordered by last-seen time
 //! (most recent last). The bucket index is determined by the XOR distance
 //! between the local node ID and the remote node ID.
+//!
+//! When a bucket is full, `add_node` returns [`AddNodeResult::BucketFull`]
+//! so the caller can PING the least-recently-seen (LRS) node before deciding
+//! whether to evict it (Section 4.3 — Sybil-resistance via ping challenge).
 
 use mesh_core::Hash;
 use mesh_core::message::NodeInfo;
 
 use crate::distance::{bucket_index, distance_cmp, xor_distance};
+
+/// Result of attempting to add a node to the routing table.
+#[derive(Debug, Clone)]
+pub enum AddNodeResult {
+    /// Node was added (bucket had space).
+    Added,
+    /// Node already existed and was moved to most-recently-seen position.
+    Updated,
+    /// Bucket is full — caller should PING the LRS node to decide.
+    BucketFull {
+        /// The least-recently-seen node currently in the bucket.
+        lrs: NodeInfo,
+        /// The new node waiting to be added.
+        candidate: NodeInfo,
+    },
+}
 
 /// Kademlia replication parameter — max entries per bucket.
 pub const K: usize = 20;
@@ -60,14 +80,20 @@ impl RoutingTable {
 
     /// Add a node to the routing table.
     ///
-    /// If the node is already in its bucket, move it to the end (most recent).
-    /// If the bucket is full, evict the least-recently-seen entry (simplified
-    /// — the full protocol pings the LRS node first, but transport isn't ready).
-    pub fn add_node(&mut self, node: NodeInfo) {
+    /// If the node is already in its bucket, move it to the end (most recent)
+    /// and return [`AddNodeResult::Updated`].
+    ///
+    /// If the bucket has room, insert and return [`AddNodeResult::Added`].
+    ///
+    /// If the bucket is full, return [`AddNodeResult::BucketFull`] with the
+    /// least-recently-seen (LRS) entry so the caller can PING-challenge it
+    /// before deciding (Section 4.3 — Sybil resistance). The caller should
+    /// call [`resolve_challenge`](Self::resolve_challenge) with the result.
+    pub fn add_node(&mut self, node: NodeInfo) -> AddNodeResult {
         let node_id = node.identity.node_id();
         let idx = match self.bucket_for(&node_id) {
             Some(i) => i,
-            None => return, // don't add ourselves
+            None => return AddNodeResult::Added, // don't add ourselves, but not an error
         };
 
         let bucket = &mut self.buckets[idx];
@@ -81,19 +107,61 @@ impl RoutingTable {
             // Move to end (most recently seen)
             bucket.entries.remove(pos);
             bucket.entries.push(node);
-            return;
+            return AddNodeResult::Updated;
         }
 
         // Bucket not full — just add
         if bucket.entries.len() < K {
             bucket.entries.push(node);
-            return;
+            return AddNodeResult::Added;
         }
 
-        // Bucket full — evict least-recently-seen (first entry)
-        // In full Kademlia, we'd PING the LRS node first. For now, just evict.
-        bucket.entries.remove(0);
-        bucket.entries.push(node);
+        // Bucket full — return the LRS node for ping challenge
+        let lrs = bucket.entries[0].clone();
+        AddNodeResult::BucketFull {
+            lrs,
+            candidate: node,
+        }
+    }
+
+    /// Resolve a ping challenge after receiving [`AddNodeResult::BucketFull`].
+    ///
+    /// If `lrs_responded` is true, the LRS node is still alive — keep it
+    /// (move to tail as most-recently-seen) and discard the candidate.
+    ///
+    /// If `lrs_responded` is false, evict the LRS node and add the candidate.
+    pub fn resolve_challenge(
+        &mut self,
+        lrs_id: &Hash,
+        candidate: NodeInfo,
+        lrs_responded: bool,
+    ) {
+        let candidate_id = candidate.identity.node_id();
+        let idx = match self.bucket_for(&candidate_id) {
+            Some(i) => i,
+            None => return,
+        };
+
+        let bucket = &mut self.buckets[idx];
+
+        if lrs_responded {
+            // LRS is still alive — move it to tail (most-recently-seen)
+            if let Some(pos) = bucket
+                .entries
+                .iter()
+                .position(|e| e.identity.node_id() == *lrs_id)
+            {
+                let lrs_node = bucket.entries.remove(pos);
+                bucket.entries.push(lrs_node);
+            }
+            // Discard candidate
+        } else {
+            // LRS is dead — evict it and add candidate
+            bucket.entries.retain(|e| e.identity.node_id() != *lrs_id);
+            if bucket.entries.len() < K {
+                bucket.entries.push(candidate);
+            }
+        }
     }
 
     /// Remove a node from the routing table by its node ID (BLAKE3 of public key).
@@ -273,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn bucket_eviction_when_full() {
+    fn bucket_full_returns_challenge() {
         let local = Keypair::generate();
         let mut table = RoutingTable::new(local.identity().node_id());
 
@@ -291,26 +359,149 @@ mod tests {
                 nodes_by_bucket[idx].push(kp);
                 bucket_counts[idx] += 1;
                 if bucket_counts[idx] > K {
-                    // Found a bucket we can overflow
                     let target_bucket = idx;
-                    for (i, node_kp) in nodes_by_bucket[target_bucket].iter().enumerate() {
-                        table.add_node(make_node_info_with_time(node_kp, i as u64));
+                    // Add the first K nodes — should all succeed
+                    for i in 0..K {
+                        let node_kp = &nodes_by_bucket[target_bucket][i];
+                        let result =
+                            table.add_node(make_node_info_with_time(node_kp, i as u64));
+                        assert!(matches!(result, AddNodeResult::Added));
                     }
-                    // Should have evicted the first node
                     assert_eq!(table.bucket(target_bucket).entries.len(), K);
-                    // The last added should be at the end
+
+                    // The (K+1)th node should trigger BucketFull
+                    let overflow_kp = &nodes_by_bucket[target_bucket][K];
+                    let result =
+                        table.add_node(make_node_info_with_time(overflow_kp, K as u64));
+                    match result {
+                        AddNodeResult::BucketFull { lrs, candidate } => {
+                            // LRS should be the first node (added with time 0)
+                            assert_eq!(
+                                lrs.identity,
+                                nodes_by_bucket[target_bucket][0].identity()
+                            );
+                            assert_eq!(candidate.identity, overflow_kp.identity());
+                        }
+                        _ => panic!("expected BucketFull, got {:?}", result),
+                    }
+
+                    // Table should still have K entries (no eviction yet)
+                    assert_eq!(table.bucket(target_bucket).entries.len(), K);
+                    return;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_challenge_lrs_responded() {
+        let local = Keypair::generate();
+        let mut table = RoutingTable::new(local.identity().node_id());
+        let local_id = local.identity().node_id();
+
+        // Fill a bucket
+        let mut bucket_counts = vec![0usize; NUM_BUCKETS];
+        let mut nodes_by_bucket: Vec<Vec<Keypair>> = (0..NUM_BUCKETS).map(|_| Vec::new()).collect();
+
+        loop {
+            let kp = Keypair::generate();
+            let node_id = kp.identity().node_id();
+            let dist = xor_distance(&local_id, &node_id);
+            if let Some(idx) = bucket_index(&dist) {
+                nodes_by_bucket[idx].push(kp);
+                bucket_counts[idx] += 1;
+                if bucket_counts[idx] > K {
+                    let target_bucket = idx;
+                    for i in 0..K {
+                        table.add_node(make_node_info_with_time(
+                            &nodes_by_bucket[target_bucket][i],
+                            i as u64,
+                        ));
+                    }
+
+                    let overflow_kp = &nodes_by_bucket[target_bucket][K];
+                    let candidate_info = make_node_info_with_time(overflow_kp, K as u64);
+                    let result = table.add_node(candidate_info.clone());
+                    let (lrs, candidate) = match result {
+                        AddNodeResult::BucketFull { lrs, candidate } => (lrs, candidate),
+                        _ => panic!("expected BucketFull"),
+                    };
+                    let lrs_id = lrs.identity.node_id();
+
+                    // LRS responded — keep it, discard candidate
+                    table.resolve_challenge(&lrs_id, candidate, true);
+
+                    // LRS should still be in the bucket (moved to tail)
+                    assert!(table
+                        .bucket(target_bucket)
+                        .entries
+                        .iter()
+                        .any(|e| e.identity.node_id() == lrs_id));
+                    // LRS should be at the end (most recently seen)
                     let last = &table.bucket(target_bucket).entries[K - 1];
-                    let expected_last = &nodes_by_bucket[target_bucket][K];
-                    assert_eq!(last.identity, expected_last.identity());
-                    // The first node should have been evicted
-                    let first_node_id = nodes_by_bucket[target_bucket][0].identity();
-                    assert!(
-                        !table
-                            .bucket(target_bucket)
-                            .entries
-                            .iter()
-                            .any(|e| e.identity == first_node_id)
-                    );
+                    assert_eq!(last.identity.node_id(), lrs_id);
+                    // Candidate should NOT be in the bucket
+                    assert!(!table
+                        .bucket(target_bucket)
+                        .entries
+                        .iter()
+                        .any(|e| e.identity == overflow_kp.identity()));
+                    return;
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_challenge_lrs_dead() {
+        let local = Keypair::generate();
+        let mut table = RoutingTable::new(local.identity().node_id());
+        let local_id = local.identity().node_id();
+
+        let mut bucket_counts = vec![0usize; NUM_BUCKETS];
+        let mut nodes_by_bucket: Vec<Vec<Keypair>> = (0..NUM_BUCKETS).map(|_| Vec::new()).collect();
+
+        loop {
+            let kp = Keypair::generate();
+            let node_id = kp.identity().node_id();
+            let dist = xor_distance(&local_id, &node_id);
+            if let Some(idx) = bucket_index(&dist) {
+                nodes_by_bucket[idx].push(kp);
+                bucket_counts[idx] += 1;
+                if bucket_counts[idx] > K {
+                    let target_bucket = idx;
+                    for i in 0..K {
+                        table.add_node(make_node_info_with_time(
+                            &nodes_by_bucket[target_bucket][i],
+                            i as u64,
+                        ));
+                    }
+
+                    let overflow_kp = &nodes_by_bucket[target_bucket][K];
+                    let candidate_info = make_node_info_with_time(overflow_kp, K as u64);
+                    let result = table.add_node(candidate_info.clone());
+                    let (lrs, candidate) = match result {
+                        AddNodeResult::BucketFull { lrs, candidate } => (lrs, candidate),
+                        _ => panic!("expected BucketFull"),
+                    };
+                    let lrs_id = lrs.identity.node_id();
+
+                    // LRS did NOT respond — evict it and add candidate
+                    table.resolve_challenge(&lrs_id, candidate, false);
+
+                    // LRS should be evicted
+                    assert!(!table
+                        .bucket(target_bucket)
+                        .entries
+                        .iter()
+                        .any(|e| e.identity.node_id() == lrs_id));
+                    // Candidate should be in the bucket
+                    assert!(table
+                        .bucket(target_bucket)
+                        .entries
+                        .iter()
+                        .any(|e| e.identity == overflow_kp.identity()));
+                    assert_eq!(table.bucket(target_bucket).entries.len(), K);
                     return;
                 }
             }

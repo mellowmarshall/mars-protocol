@@ -17,6 +17,60 @@ pub struct HubConfig {
     pub policy: PolicyConfig,
     #[serde(default)]
     pub security: SecurityConfig,
+    #[serde(default)]
+    pub peering: PeeringConfig,
+}
+
+/// Hub-to-hub peering configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PeeringConfig {
+    /// Enable hub peering (default: false).
+    #[serde(default)]
+    pub enabled: bool,
+    /// Interval in seconds between gossip rounds (default: 60).
+    #[serde(default = "default_gossip_interval")]
+    pub gossip_interval_secs: u64,
+    /// Interval in seconds between health checks (default: 10).
+    #[serde(default = "default_health_check_interval")]
+    pub health_check_interval_secs: u64,
+    /// Maximum number of connected peers (default: 50).
+    #[serde(default = "default_max_peers")]
+    pub max_peers: usize,
+    /// Regions this hub serves (for metadata advertisement).
+    #[serde(default)]
+    pub regions: Vec<String>,
+    /// Maximum descriptors this hub stores (for metadata advertisement).
+    #[serde(default = "default_max_descriptors")]
+    pub max_descriptors: u64,
+}
+
+impl Default for PeeringConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            gossip_interval_secs: default_gossip_interval(),
+            health_check_interval_secs: default_health_check_interval(),
+            max_peers: default_max_peers(),
+            regions: Vec::new(),
+            max_descriptors: default_max_descriptors(),
+        }
+    }
+}
+
+fn default_gossip_interval() -> u64 {
+    60
+}
+
+fn default_health_check_interval() -> u64 {
+    10
+}
+
+fn default_max_peers() -> usize {
+    50
+}
+
+fn default_max_descriptors() -> u64 {
+    1_000_000
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -50,6 +50,10 @@ fn db_err(e: impl std::fmt::Display) -> StoreError {
 
 impl RedbStorage {
     /// Open or create a redb-backed descriptor store.
+    ///
+    /// Sequence watermarks (replay protection) are persisted in the SEQUENCES
+    /// table and read directly from disk during `store_descriptor_at`, so they
+    /// survive process restarts without needing to be loaded into memory here.
     pub fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let db = Database::create(path)?;
         // Initialize tables on first open
@@ -467,6 +471,76 @@ mod tests {
             let store = RedbStorage::open(&db_path).unwrap();
             let results = store.get_descriptors(&rk, None);
             assert_eq!(results.len(), 1);
+        }
+    }
+
+    /// B4: Replay watermark persistence — sequence floors survive reopen.
+    ///
+    /// The SEQUENCES table persists the highest sequence seen per dedup key.
+    /// On reopen, store_descriptor_at reads directly from the redb table
+    /// within the write transaction, so stale descriptors are rejected even
+    /// after the process restarts.
+    #[test]
+    fn replay_watermark_persisted_across_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("watermark.redb");
+        let kp = Keypair::generate();
+        let now = now_micros();
+
+        // Store descriptor with sequence=5, then drop the store
+        {
+            let mut store = RedbStorage::open(&db_path).unwrap();
+            let desc = Descriptor::create(
+                &kp,
+                schema_hash("core/capability"),
+                "topic".into(),
+                b"payload".to_vec(),
+                now,
+                5,
+                3600,
+                vec![routing_key("compute/inference/text-generation")],
+            )
+            .unwrap();
+            store.store_descriptor_at(desc, now).unwrap();
+        }
+
+        // Reopen and try to store descriptor with sequence=3 — should be rejected
+        {
+            let mut store = RedbStorage::open(&db_path).unwrap();
+            let desc = Descriptor::create(
+                &kp,
+                schema_hash("core/capability"),
+                "topic".into(),
+                b"payload v2".to_vec(),
+                now,
+                3,
+                3600,
+                vec![routing_key("compute/inference/text-generation")],
+            )
+            .unwrap();
+            let result = store.store_descriptor_at(desc, now);
+            assert!(
+                matches!(result, Err(StoreError::StaleDescriptor { received: 3, current: 5 })),
+                "stale descriptor should be rejected after reopen: {:?}",
+                result,
+            );
+        }
+
+        // Also verify that a higher sequence still works after reopen
+        {
+            let mut store = RedbStorage::open(&db_path).unwrap();
+            let desc = Descriptor::create(
+                &kp,
+                schema_hash("core/capability"),
+                "topic".into(),
+                b"payload v3".to_vec(),
+                now,
+                6,
+                3600,
+                vec![routing_key("compute/inference/text-generation")],
+            )
+            .unwrap();
+            assert!(store.store_descriptor_at(desc, now).is_ok());
         }
     }
 

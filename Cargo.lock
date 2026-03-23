@@ -971,6 +971,7 @@ dependencies = [
 name = "mesh-dht"
 version = "0.1.0"
 dependencies = [
+ "ciborium",
  "mesh-core",
  "mesh-transport",
  "rand 0.8.5",
