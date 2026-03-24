@@ -13,6 +13,7 @@ import httpx
 from sources.public_apis import PUBLIC_APIS
 from sources.mcp_skills import MCP_SKILLS
 from sources.llm_endpoints import LLM_ENDPOINTS
+from sources.startups import STARTUP_APIS
 
 
 def publish_descriptor(
@@ -130,6 +131,7 @@ def main() -> None:
         ("Public APIs", PUBLIC_APIS),
         ("MCP Skills", MCP_SKILLS),
         ("LLM Endpoints", LLM_ENDPOINTS),
+        ("Startup APIs", STARTUP_APIS),
     ]
 
     total_published = 0
