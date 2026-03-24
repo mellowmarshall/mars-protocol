@@ -1,1 +1,5 @@
 /target
+
+# Build artifacts
+sdks/python/dist/
+bridges/mcp/dist/
