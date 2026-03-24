@@ -1,0 +1,163 @@
+"""Top MCP/ClawHub skills as mesh descriptors."""
+
+MCP_SKILLS = [
+    # Top installed (Anthropic official)
+    {
+        "type": "mcp/tool/web-fetch",
+        "endpoint": "npx:-y:@anthropic/mcp-server-fetch",
+        "params": {
+            "name": "Web Fetch",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "installs": "180000+",
+            "description": "Fetch web pages for research and fact-checking",
+        },
+    },
+    {
+        "type": "mcp/tool/brave-search",
+        "endpoint": "npx:-y:@anthropic/mcp-server-brave-search",
+        "params": {
+            "name": "Brave Search",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Web search via Brave Search API",
+            "auth": "BRAVE_API_KEY",
+        },
+    },
+    {
+        "type": "mcp/tool/filesystem",
+        "endpoint": "npx:-y:@anthropic/mcp-server-filesystem",
+        "params": {
+            "name": "Filesystem",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Read, write, and manage files",
+        },
+    },
+    {
+        "type": "mcp/tool/github",
+        "endpoint": "npx:-y:@anthropic/mcp-server-github",
+        "params": {
+            "name": "GitHub",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "GitHub API integration — repos, issues, PRs",
+            "auth": "GITHUB_TOKEN",
+        },
+    },
+    {
+        "type": "mcp/tool/postgres",
+        "endpoint": "npx:-y:@anthropic/mcp-server-postgres",
+        "params": {
+            "name": "PostgreSQL",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Query PostgreSQL databases",
+        },
+    },
+    {
+        "type": "mcp/tool/sqlite",
+        "endpoint": "npx:-y:@anthropic/mcp-server-sqlite",
+        "params": {
+            "name": "SQLite",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Read and query SQLite databases",
+        },
+    },
+    {
+        "type": "mcp/tool/memory",
+        "endpoint": "npx:-y:@anthropic/mcp-server-memory",
+        "params": {
+            "name": "Memory",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Persistent memory via knowledge graph",
+        },
+    },
+    {
+        "type": "mcp/tool/puppeteer",
+        "endpoint": "npx:-y:@anthropic/mcp-server-puppeteer",
+        "params": {
+            "name": "Puppeteer",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Browser automation via Puppeteer",
+        },
+    },
+    {
+        "type": "mcp/tool/slack",
+        "endpoint": "npx:-y:@anthropic/mcp-server-slack",
+        "params": {
+            "name": "Slack",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Slack workspace integration",
+            "auth": "SLACK_TOKEN",
+        },
+    },
+    {
+        "type": "mcp/tool/google-maps",
+        "endpoint": "npx:-y:@anthropic/mcp-server-google-maps",
+        "params": {
+            "name": "Google Maps",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Geocoding, directions, places",
+            "auth": "GOOGLE_MAPS_KEY",
+        },
+    },
+    # Popular community skills
+    {
+        "type": "mcp/tool/tavily-search",
+        "endpoint": "npx:-y:tavily-mcp-server",
+        "params": {
+            "name": "Tavily Search",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "AI-optimized web search",
+            "auth": "TAVILY_API_KEY",
+        },
+    },
+    {
+        "type": "mcp/tool/playwright",
+        "endpoint": "npx:-y:@anthropic/mcp-server-playwright",
+        "params": {
+            "name": "Playwright",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Browser automation via Playwright",
+        },
+    },
+    {
+        "type": "mcp/tool/sequential-thinking",
+        "endpoint": "npx:-y:@anthropic/mcp-server-sequential-thinking",
+        "params": {
+            "name": "Sequential Thinking",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Step-by-step reasoning tool",
+        },
+    },
+    {
+        "type": "mcp/tool/context7",
+        "endpoint": "npx:-y:@context7/mcp-server",
+        "params": {
+            "name": "Context7",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Up-to-date library documentation",
+        },
+    },
+    {
+        "type": "mcp/tool/firecrawl",
+        "endpoint": "npx:-y:firecrawl-mcp",
+        "params": {
+            "name": "Firecrawl",
+            "protocol": "mcp",
+            "transport": "stdio",
+            "description": "Web scraping and crawling",
+            "auth": "FIRECRAWL_API_KEY",
+        },
+    },
+]
