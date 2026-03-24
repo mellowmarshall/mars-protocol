@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use mesh_core::frame::{
-    MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT,
+    MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT, MSG_PING, MSG_PONG,
 };
 use mesh_core::identity::{Identity, Keypair};
 use mesh_core::message::{
@@ -363,6 +363,43 @@ impl<S: DescriptorStorage> DhtNode<S> {
             }
         }
 
+        // Small-network fallback: if iterative lookup found nothing and we know
+        // fewer than K nodes total, broadcast FIND_VALUE to ALL known nodes,
+        // even if already queried. The iterative pass may have received "closest
+        // nodes" responses instead of descriptors because the data was stored
+        // at a different routing key distance. Re-querying ensures we hit the
+        // node that actually has the data.
+        if collected_descriptors.is_empty() {
+            let all_nodes = self.routing_table.all_nodes();
+            if all_nodes.len() <= K {
+                for node in &all_nodes {
+                    let find_value = FindValue {
+                        sender: self.identity.clone(),
+                        sender_addr: self.addr.clone(),
+                        key: target_key.clone(),
+                        max_results: self.config.max_find_value_results,
+                        filters: None,
+                    };
+                    let body = to_cbor(&find_value)
+                        .map_err(|e| TransportError::FrameError(e.to_string()))?;
+                    let frame = Frame::new(MSG_FIND_VALUE, body);
+
+                    if let Ok(resp) = transport.send_request(&node.addr, frame).await {
+                        if resp.msg_type == MSG_FIND_VALUE_RESULT
+                            && let Ok(result) = from_cbor::<FindValueResult>(&resp.body)
+                        {
+                            if let Some(descs) = result.descriptors {
+                                collected_descriptors.extend(descs);
+                            }
+                        }
+                    }
+                    if !collected_descriptors.is_empty() {
+                        break;
+                    }
+                }
+            }
+        }
+
         Ok(collected_descriptors)
     }
 
@@ -378,7 +415,31 @@ impl<S: DescriptorStorage> DhtNode<S> {
         let mut discovered = 0;
 
         for seed_addr in seeds {
-            // Send FIND_NODE for our own ID
+            // PING the seed first to learn its identity and add it to our routing table.
+            // This ensures we can query the seed directly during lookups — critical for
+            // small networks where seeds are the only nodes that have stored data.
+            let ping = Ping {
+                sender: self.identity.clone(),
+                sender_addr: self.addr.clone(),
+            };
+            let ping_body =
+                to_cbor(&ping).map_err(|e| TransportError::FrameError(e.to_string()))?;
+            let ping_frame = Frame::new(MSG_PING, ping_body);
+
+            if let Ok(pong_resp) = transport.send_request(seed_addr, ping_frame).await {
+                if pong_resp.msg_type == MSG_PONG
+                    && let Ok(pong) = from_cbor::<Pong>(&pong_resp.body)
+                {
+                    let _ = self.routing_table.add_node(NodeInfo {
+                        identity: pong.sender,
+                        addr: seed_addr.clone(),
+                        last_seen: Self::now_micros(),
+                    });
+                    discovered += 1;
+                }
+            }
+
+            // Send FIND_NODE for our own ID to discover more nodes
             let find_node = FindNode {
                 sender: self.identity.clone(),
                 sender_addr: self.addr.clone(),

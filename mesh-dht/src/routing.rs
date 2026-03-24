@@ -190,6 +190,11 @@ impl RoutingTable {
         all_nodes.into_iter().take(count).cloned().collect()
     }
 
+    /// Return all nodes in the routing table (unordered).
+    pub fn all_nodes(&self) -> Vec<NodeInfo> {
+        self.buckets.iter().flat_map(|b| b.entries.iter()).cloned().collect()
+    }
+
     /// Total number of nodes in the routing table.
     pub fn len(&self) -> usize {
         self.buckets.iter().map(|b| b.entries.len()).sum()

@@ -374,6 +374,9 @@ async fn handle_protocol_request(
                     return;
                 }
                 let result = node.handle_find_value(&find);
+                let desc_count = result.descriptors.as_ref().map_or(0, |d| d.len());
+                let node_count = result.nodes.as_ref().map_or(0, |n| n.len());
+                tracing::info!(key = %find.key, desc_count, node_count, "FIND_VALUE handled");
                 let body = to_cbor(&result).unwrap();
                 Frame::response(&frame, MSG_FIND_VALUE_RESULT, body)
             }

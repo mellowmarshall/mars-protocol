@@ -12,8 +12,8 @@ use std::net::SocketAddr;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use mesh_core::frame::{MSG_PING, MSG_PONG, MSG_STORE, MSG_STORE_ACK};
-use mesh_core::message::{Ping, Pong, Store, StoreAck, from_cbor, to_cbor};
+use mesh_core::frame::{MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT, MSG_PING, MSG_PONG, MSG_STORE, MSG_STORE_ACK};
+use mesh_core::message::{FindValue, FindValueResult, Ping, Pong, Store, StoreAck, from_cbor, to_cbor};
 use mesh_core::Frame;
 use mesh_dht::node::DhtConfig;
 use mesh_dht::storage::DescriptorStore;
@@ -152,6 +152,30 @@ impl MeshClient {
     }
 
     /// Discover descriptors at a routing key via iterative Kademlia lookup.
+    ///
+    /// Falls back to a direct FIND_VALUE to the given target node if the
+    /// iterative lookup returns empty — essential for small networks where
+    /// DHT routing hasn't converged.
+    pub async fn discover_from(
+        &mut self,
+        routing_key: &Hash,
+        target: &NodeAddr,
+    ) -> Result<Vec<Descriptor>, ClientError> {
+        // Try iterative lookup first
+        let results = self.node
+            .lookup_value(routing_key, &self.transport)
+            .await
+            .map_err(ClientError::Transport)?;
+
+        if !results.is_empty() {
+            return Ok(results);
+        }
+
+        // Direct query fallback for small networks
+        self.query_node(routing_key, target).await
+    }
+
+    /// Discover descriptors via iterative Kademlia lookup only.
     pub async fn discover(
         &mut self,
         routing_key: &Hash,
@@ -160,6 +184,36 @@ impl MeshClient {
             .lookup_value(routing_key, &self.transport)
             .await
             .map_err(ClientError::Transport)
+    }
+
+    /// Send a FIND_VALUE directly to a specific node, bypassing DHT routing.
+    pub async fn query_node(
+        &mut self,
+        routing_key: &Hash,
+        target: &NodeAddr,
+    ) -> Result<Vec<Descriptor>, ClientError> {
+        let find_value = FindValue {
+            sender: self.node.keypair().identity(),
+            sender_addr: self.node.addr().clone(),
+            key: routing_key.clone(),
+            max_results: 100,
+            filters: None,
+        };
+        let body = to_cbor(&find_value).map_err(|e| ClientError::Codec(e.to_string()))?;
+        let frame = Frame::new(MSG_FIND_VALUE, body);
+
+        let resp = self.transport
+            .send_request(target, frame)
+            .await
+            .map_err(ClientError::Transport)?;
+
+        if resp.msg_type == MSG_FIND_VALUE_RESULT {
+            let result: FindValueResult =
+                from_cbor(&resp.body).map_err(|e| ClientError::Codec(e.to_string()))?;
+            Ok(result.descriptors.unwrap_or_default())
+        } else {
+            Err(ClientError::UnexpectedResponse(resp.msg_type))
+        }
     }
 
     /// Ping a remote mesh node.

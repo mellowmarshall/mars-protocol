@@ -6,7 +6,7 @@
 use std::net::SocketAddr;
 
 use clap::Parser;
-use mesh_client::{
+use mars_client::{
     schema_hash, routing_key, Keypair, MeshClient, NodeAddr,
 };
 

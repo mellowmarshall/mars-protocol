@@ -220,7 +220,7 @@ async fn discover(
     let rk = mesh_core::routing::routing_key(&query.r#type);
 
     let mut client = state.client.lock().await;
-    let descriptors = client.discover(&rk).await.map_err(|e| {
+    let descriptors = client.discover_from(&rk, &state.seed).await.map_err(|e| {
         error!(error = %e, "discover failed");
         (
             StatusCode::BAD_GATEWAY,
