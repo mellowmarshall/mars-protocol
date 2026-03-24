@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.backends"
+
+[project]
+name = "mesh-mcp-bridge"
+version = "0.1.0"
+description = "Bidirectional bridge between MCP servers and the mesh network"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Marshall Brett" }]
+dependencies = [
+    "httpx>=0.27",
+    "mcp>=1.0",
+    "click>=8.0",
+]
+
+[project.urls]
+Repository = "https://github.com/marshallbrett/mesh-protocol"
+
+[project.scripts]
+mesh-mcp-bridge = "mesh_mcp_bridge.cli:main"

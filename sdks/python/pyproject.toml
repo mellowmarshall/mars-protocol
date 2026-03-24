@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mesh-protocol"
+version = "0.1.0"
+description = "Python client for the Capability Mesh Protocol — publish and discover capabilities on a decentralized mesh network."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT OR Apache-2.0"
+keywords = ["mesh", "dht", "p2p", "capability-discovery", "agents", "ai"]
+authors = [
+    { name = "Marshall Brett", email = "marshall@meshprotocol.dev" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+    "httpx>=0.27",
+]
+
+[project.urls]
+Homepage = "https://github.com/marshallbrett/mesh-protocol"
+Repository = "https://github.com/marshallbrett/mesh-protocol"
+Issues = "https://github.com/marshallbrett/mesh-protocol/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mesh_protocol"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "respx>=0.22",
+]
