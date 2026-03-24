@@ -1,0 +1,22 @@
+{
+  "name": "mars-protocol",
+  "version": "0.1.0",
+  "description": "TypeScript client for the Mesh Agent Routing Standard — decentralized capability discovery for autonomous agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["mesh", "dht", "p2p", "capability-discovery", "agents", "ai", "mars", "mcp"],
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mellowmarshall/mars-protocol"
+  },
+  "homepage": "https://github.com/mellowmarshall/mars-protocol",
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
