@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info};
 
-use mesh_client::MeshClient;
+use mars_client::MeshClient;
 use mesh_core::hash::schema_hash;
 use mesh_core::identity::Keypair;
 use mesh_core::message::NodeAddr;
