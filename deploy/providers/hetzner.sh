@@ -10,7 +10,7 @@
 PROVIDER_NAME="hetzner"
 PROVIDER_CLI="hcloud"
 PROVIDER_SSH_USER="root"
-PROVIDER_SERVER_TYPE="${MESH_SERVER_TYPE:-cx22}"       # 2 vCPU, 4GB, 40GB (~$4.50/mo)
+PROVIDER_SERVER_TYPE="${MESH_SERVER_TYPE:-cpx11}"      # 2 vCPU, 2GB, 40GB (~$4.50/mo)
 PROVIDER_IMAGE="${MESH_IMAGE:-debian-12}"
 PROVIDER_SSH_KEY="${MESH_SSH_KEY:-mesh-deploy}"
 
@@ -18,7 +18,7 @@ PROVIDER_SSH_KEY="${MESH_SSH_KEY:-mesh-deploy}"
 declare -A PROVIDER_LOCATIONS=(
     ["us-east"]="ash"
     ["us-west"]="hil"
-    ["eu-central"]="fsn1"
+    ["eu-central"]="nbg1"
     ["ap-southeast"]="sin"
 )
 

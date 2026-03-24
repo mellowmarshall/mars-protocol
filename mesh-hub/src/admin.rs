@@ -40,11 +40,11 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
         .route("/api/v1/hub/status", get(hub_status))
         // Challenge-response identity verification (public-facing)
         .route(
-            "/api/v1/tenants/:id/identities/challenge",
+            "/api/v1/tenants/{id}/identities/challenge",
             post(create_identity_challenge),
         )
         .route(
-            "/api/v1/tenants/:id/identities/verify",
+            "/api/v1/tenants/{id}/identities/verify",
             post(verify_identity),
         );
 
@@ -55,16 +55,16 @@ pub fn admin_router(state: Arc<AdminState>) -> Router {
             get(list_tenants).post(create_tenant),
         )
         .route(
-            "/api/v1/tenants/:id",
+            "/api/v1/tenants/{id}",
             get(get_tenant).delete(delete_tenant),
         )
-        .route("/api/v1/tenants/:id/identities", post(register_identity))
+        .route("/api/v1/tenants/{id}/identities", post(register_identity))
         .route(
-            "/api/v1/tenants/:id/identities/:did",
+            "/api/v1/tenants/{id}/identities/{did}",
             delete(remove_identity),
         )
-        .route("/api/v1/tenants/:id/usage", get(get_tenant_usage))
-        .route("/api/v1/tenants/:id/quota", patch(update_tenant_quota))
+        .route("/api/v1/tenants/{id}/usage", get(get_tenant_usage))
+        .route("/api/v1/tenants/{id}/quota", patch(update_tenant_quota))
         .route("/metrics", get(prometheus_metrics));
 
     public.merge(operator).with_state(state)
