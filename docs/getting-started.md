@@ -1,4 +1,4 @@
-# Getting Started with Mesh Protocol
+# Getting Started with MARS Protocol
 
 ## Prerequisites
 
@@ -8,13 +8,25 @@
 ## Build
 
 ```bash
-git clone <repo-url> && cd mesh-protocol
+git clone https://github.com/marshallbrett/mars-protocol.git && cd mars-protocol
 cargo build --release
 ```
 
 Binaries:
 - `target/release/mesh-node` -- lightweight mesh node and CLI
 - `target/release/mesh-hub` -- high-capacity hub node
+- `target/release/mesh-gateway` -- HTTP/JSON gateway for non-Rust agents
+
+## Live Hubs
+
+The MARS mesh is live. Use any of these hubs as a seed:
+
+| Hub | Address | Location |
+|-----|---------|----------|
+| **us-east** | `5.161.53.251:4433` | Ashburn, VA |
+| **us-west** | `5.78.197.92:4433` | Hillsboro, OR |
+| **eu-central** | `46.225.55.16:4433` | Nuremberg, DE |
+| **ap-southeast** | `5.223.69.128:4433` | Singapore |
 
 ## Generate Identity
 
@@ -44,7 +56,7 @@ Start a mesh node listening for QUIC connections:
 ```bash
 ./target/release/mesh-node start \
   --listen 0.0.0.0:4433 \
-  --seed 198.51.100.1:4433 \
+  --seed 5.161.53.251:4433 \
   --identity ~/.mesh/node.key
 ```
 
@@ -63,7 +75,7 @@ Publish a capability descriptor to the mesh:
   --type compute/inference/text-generation \
   --endpoint 203.0.113.10:5000 \
   --params '{"model": "llama-3", "max_tokens": 4096}' \
-  --seed 198.51.100.1:4433 \
+  --seed 5.161.53.251:4433 \
   --identity ~/.mesh/node.key
 ```
 
@@ -81,7 +93,7 @@ Search the mesh for capabilities by type:
 ```bash
 ./target/release/mesh-node discover \
   --type compute/inference \
-  --seed 198.51.100.1:4433 \
+  --seed 5.161.53.251:4433 \
   --identity ~/.mesh/node.key
 ```
 
@@ -105,11 +117,70 @@ Check connectivity to a remote node:
 
 ```bash
 ./target/release/mesh-node ping \
-  --addr 198.51.100.1:4433 \
+  --addr 5.161.53.251:4433 \
   --identity ~/.mesh/node.key
 ```
 
 Returns the peer's DID, its observed address for you, and its own address.
+
+## HTTP Gateway and Python SDK
+
+The easiest way for non-Rust agents to use the mesh is through the HTTP gateway and Python SDK.
+
+### Start the Gateway
+
+The gateway connects to the mesh via QUIC and exposes a simple HTTP/JSON API:
+
+```bash
+./target/release/mesh-gateway --seed 5.161.53.251:4433 --listen 0.0.0.0:3000
+```
+
+### Python SDK
+
+Install the Python SDK:
+
+```bash
+pip install mesh-protocol
+```
+
+Use it to publish and discover capabilities:
+
+```python
+from mesh_protocol import MeshClient
+
+# Connect via the local gateway
+with MeshClient("http://localhost:3000") as client:
+    # Publish a capability
+    result = client.publish(
+        "compute/inference/text-generation",
+        endpoint="https://my-agent.example.com/v1/generate",
+        params={"model": "llama-3.3-70b"},
+    )
+    print(result.descriptor_id)
+
+    # Discover capabilities
+    providers = client.discover("compute/inference")
+    for p in providers:
+        print(f"{p.type} -> {p.endpoint}")
+```
+
+Async usage:
+
+```python
+import asyncio
+from mesh_protocol import AsyncMeshClient
+
+async def main():
+    async with AsyncMeshClient("http://localhost:3000") as client:
+        await client.publish(
+            "storage/blob",
+            endpoint="https://my-storage.example.com/v1/upload",
+        )
+        providers = await client.discover("storage")
+        print(providers)
+
+asyncio.run(main())
+```
 
 ## Run a Hub
 
@@ -169,15 +240,22 @@ Start the first node (it has no seeds -- it is the seed):
 mesh-node start --listen 0.0.0.0:4433 --identity ~/.mesh/seed.key
 ```
 
-Start additional nodes pointing to the seed:
+Start additional nodes pointing to a live hub:
 
 ```bash
 mesh-node start --listen 0.0.0.0:4434 \
-  --seed 198.51.100.1:4433 \
+  --seed 5.161.53.251:4433 \
   --identity ~/.mesh/node2.key
 ```
 
-Nodes can specify multiple `--seed` flags for redundancy.
+Nodes can specify multiple `--seed` flags for redundancy:
+
+```bash
+mesh-node start --listen 0.0.0.0:4434 \
+  --seed 5.161.53.251:4433 \
+  --seed 5.78.197.92:4433 \
+  --identity ~/.mesh/node2.key
+```
 
 ### Hub Peering
 
@@ -229,10 +307,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut client = MeshClient::new(keypair, bind_addr).await?;
 
-    // Bootstrap from a seed node
+    // Bootstrap from a live hub
     let seed = NodeAddr {
         protocol: "quic".into(),
-        address: "198.51.100.1:4433".into(),
+        address: "5.161.53.251:4433".into(),
     };
     let discovered = client.bootstrap(&[seed.clone()]).await?;
     println!("Discovered {discovered} nodes");
@@ -269,6 +347,6 @@ tokio = { version = "1", features = ["full"] }
 
 - **`MeshClient`** -- wraps identity, QUIC transport, and DHT node
 - **`Descriptor`** -- a signed capability record with schema, topic, payload, routing keys, and TTL
-- **`NodeAddr`** -- protocol + address pair (e.g., `quic://198.51.100.1:4433`)
+- **`NodeAddr`** -- protocol + address pair (e.g., `quic://5.161.53.251:4433`)
 - **`Hash`** -- 32-byte routing key for DHT lookups
 - **`Keypair` / `Identity`** -- Ed25519 keypair and its derived DID (`did:mesh:z6Mk...`)

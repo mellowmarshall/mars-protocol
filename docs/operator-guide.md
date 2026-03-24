@@ -1,4 +1,4 @@
-# Mesh Hub Operator Guide
+# MARS Hub Operator Guide
 
 ## Overview
 

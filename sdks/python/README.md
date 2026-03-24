@@ -1,12 +1,30 @@
-# mesh-protocol
+# mars-protocol
 
-Python client for the [Capability Mesh Protocol](https://github.com/marshallbrett/mesh-protocol). A thin wrapper around the mesh-gateway HTTP API that lets you publish and discover capabilities on the decentralized mesh network.
+Python client for the [Mesh Agent Routing Standard](https://github.com/marshallbrett/mars-protocol). A thin wrapper around the mesh-gateway HTTP API that lets you publish and discover capabilities on the decentralized mesh network.
 
 ## Install
 
 ```bash
 pip install mesh-protocol
 ```
+
+## Live Network
+
+The MARS mesh is live. Start a gateway connected to any hub, then use this SDK:
+
+```bash
+# Start the gateway (connects to mesh via QUIC, exposes HTTP)
+./target/release/mesh-gateway --seed 5.161.53.251:4433 --listen 0.0.0.0:3000
+```
+
+Available hubs:
+
+| Hub | Address | Location |
+|-----|---------|----------|
+| **us-east** | `5.161.53.251:4433` | Ashburn, VA |
+| **us-west** | `5.78.197.92:4433` | Hillsboro, OR |
+| **eu-central** | `46.225.55.16:4433` | Nuremberg, DE |
+| **ap-southeast** | `5.223.69.128:4433` | Singapore |
 
 ## Quick start
 
@@ -65,5 +83,5 @@ MIT OR Apache-2.0
 
 ## Links
 
-- [Mesh Protocol repository](https://github.com/marshallbrett/mesh-protocol)
-- [Protocol specification](https://github.com/marshallbrett/mesh-protocol/blob/main/PROTOCOL.md)
+- [MARS Protocol repository](https://github.com/marshallbrett/mars-protocol)
+- [Protocol specification](https://github.com/marshallbrett/mars-protocol/blob/main/PROTOCOL.md)

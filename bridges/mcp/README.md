@@ -1,12 +1,28 @@
 # mesh-mcp-bridge
 
-Bidirectional bridge between [MCP](https://modelcontextprotocol.io/) servers and the [mesh protocol](https://github.com/marshallbrett/mesh-protocol) network.
+Bidirectional bridge between [MCP](https://modelcontextprotocol.io/) servers and the [MARS protocol](https://github.com/marshallbrett/mars-protocol) network.
 It publishes MCP server capabilities as mesh descriptors **and** exposes mesh capabilities to MCP-compatible agents as standard MCP tools.
 
 ## Install
 
 ```
 pip install mesh-mcp-bridge
+```
+
+## Live Network
+
+Connect your gateway to any MARS hub:
+
+| Hub | Address | Location |
+|-----|---------|----------|
+| **us-east** | `5.161.53.251:4433` | Ashburn, VA |
+| **us-west** | `5.78.197.92:4433` | Hillsboro, OR |
+| **eu-central** | `46.225.55.16:4433` | Nuremberg, DE |
+| **ap-southeast** | `5.223.69.128:4433` | Singapore |
+
+```bash
+# Start a gateway connected to the live mesh
+./target/release/mesh-gateway --seed 5.161.53.251:4433 --listen 0.0.0.0:3000
 ```
 
 ## Usage
@@ -68,6 +84,6 @@ to the endpoint recorded in the descriptor.
 
 ## Links
 
-- [mesh-protocol](https://github.com/marshallbrett/mesh-protocol)
+- [mars-protocol](https://github.com/marshallbrett/mars-protocol)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)

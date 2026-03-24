@@ -1,8 +1,10 @@
 <div align="center">
 
-# mesh-protocol
+# mars-protocol
 
-**A decentralized capability discovery network for autonomous agents**
+**Mesh Agent Routing Standard**
+
+A decentralized capability discovery network for autonomous agents
 
 [![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org/)
@@ -12,7 +14,7 @@
 
 *How does an AI agent find another agent that can review code, generate images, or search the web — without a central registry?*
 
-**mesh-protocol** is a [Kademlia DHT](https://en.wikipedia.org/wiki/Kademlia) over QUIC that lets machines publish, discover, and verify capabilities across a global peer-to-peer mesh. No API keys. No platform lock-in. No single point of failure.
+**mars-protocol** is a [Kademlia DHT](https://en.wikipedia.org/wiki/Kademlia) over QUIC that lets machines publish, discover, and verify capabilities across a global peer-to-peer mesh. No API keys. No platform lock-in. No single point of failure.
 
 <br>
 
@@ -22,11 +24,24 @@
 
 ---
 
+## Live Network
+
+The MARS mesh is live. Connect to any hub to join:
+
+| Hub | Address | Location |
+|-----|---------|----------|
+| **us-east** | `5.161.53.251:4433` | Ashburn, VA |
+| **us-west** | `5.78.197.92:4433` | Hillsboro, OR |
+| **eu-central** | `46.225.55.16:4433` | Nuremberg, DE |
+| **ap-southeast** | `5.223.69.128:4433` | Singapore |
+
+---
+
 ## Why
 
 Every AI agent framework reinvents service discovery. MCP servers need manual configuration. Tool registries are centralized bottlenecks. When you have thousands of agents across multiple organizations, "just add it to the config file" doesn't scale.
 
-**mesh-protocol** makes capability discovery a network primitive:
+**mars-protocol** makes capability discovery a network primitive:
 
 ```
 ┌──────────────┐         ┌──────────────┐         ┌──────────────┐
@@ -64,7 +79,7 @@ cargo build --release
 # Generate an identity
 ./target/release/mesh-node identity --generate --path my-agent.key
 
-# Start a node (or connect to an existing hub)
+# Start a node (connects to the live mesh)
 ./target/release/mesh-node start --listen 0.0.0.0:4433 --identity my-agent.key
 
 # Publish a capability
@@ -72,17 +87,41 @@ cargo build --release
     --type "compute/inference/text-generation" \
     --endpoint "https://my-agent.example.com/v1/generate" \
     --params '{"model":"llama-3.3-70b","max_tokens":4096}' \
-    --seed 127.0.0.1:4433 \
+    --seed 5.161.53.251:4433 \
     --identity my-agent.key
 
 # Discover capabilities
 ./target/release/mesh-node discover \
     --type "compute/inference" \
-    --seed 127.0.0.1:4433 \
+    --seed 5.161.53.251:4433 \
     --identity my-agent.key
 ```
 
 See the [Getting Started Guide](docs/getting-started.md) for multi-node setup and hub deployment.
+
+### Python SDK (easiest onramp)
+
+```bash
+pip install mesh-protocol
+```
+
+```python
+from mesh_protocol import MeshClient
+
+# Connect via a local gateway (or any gateway endpoint)
+with MeshClient("http://localhost:3000") as client:
+    # Publish a capability
+    client.publish(
+        "compute/inference/text-generation",
+        endpoint="https://my-agent.example.com/v1/generate",
+        params={"model": "llama-3.3-70b"},
+    )
+
+    # Discover capabilities
+    providers = client.discover("compute/inference")
+    for p in providers:
+        print(f"{p.type} -> {p.endpoint}")
+```
 
 ### For non-Rust agents (Python, TypeScript, Go, etc.)
 
@@ -90,7 +129,7 @@ Run the HTTP gateway and use simple REST calls:
 
 ```bash
 # Start the gateway (connects to mesh via QUIC, exposes HTTP)
-./target/release/mesh-gateway --seed 127.0.0.1:4433 --listen 0.0.0.0:3000
+./target/release/mesh-gateway --seed 5.161.53.251:4433 --listen 0.0.0.0:3000
 ```
 
 ```python
@@ -104,6 +143,25 @@ requests.post("http://localhost:3000/v1/publish", json={
 # Another agent discovers it
 r = requests.get("http://localhost:3000/v1/discover?type=compute/inference")
 print(r.json()["descriptors"])
+```
+
+### MCP Bridge
+
+Publish MCP server tools to the mesh and discover mesh capabilities as MCP tools:
+
+```bash
+pip install mesh-mcp-bridge
+
+# Publish your MCP server's tools to the mesh
+mesh-mcp-bridge publish \
+  --gateway http://localhost:3000 \
+  --mcp-server "python my_mcp_server.py" \
+  --name "my-tools"
+
+# Expose mesh capabilities as MCP tools
+mesh-mcp-bridge serve \
+  --gateway http://localhost:3000 \
+  --transport stdio
 ```
 
 ---
@@ -279,7 +337,7 @@ Sensors publish `data/sensor/temperature` descriptors. Edge compute nodes publis
 
 ## Project Status
 
-mesh-protocol is **feature-complete for v0.1** and ready for deployment.
+mars-protocol is **feature-complete for v0.1** and ready for deployment.
 
 | Component | Status |
 |-----------|--------|
