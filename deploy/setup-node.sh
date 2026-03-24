@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Mesh Hub — Hetzner VPS Setup Script (Multi-Region)
+# Mesh Hub — Node Setup Script (runs on the VPS, provider-agnostic)
 # ============================================================================
-# Run this on a fresh Hetzner CX22 (or similar) running Debian 12 / Ubuntu 24.
+# Run this on a fresh VPS running Debian 12 / Ubuntu 24.
+# Works with any cloud provider — only needs a Linux box with SSH access.
 #
 # Usage:
-#   setup-hetzner.sh <region> [seed_addr]
+#   setup-node.sh <region> [seed_addr]
 #
 # Regions:
 #   us-east       Ashburn, VA

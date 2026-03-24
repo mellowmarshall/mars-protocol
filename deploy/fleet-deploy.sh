@@ -1,66 +1,96 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Mesh Hub Fleet — Multi-Region Deployment via Hetzner Cloud CLI
+# Mesh Hub Fleet — Provider-Agnostic Multi-Region Deployment
 # ============================================================================
-# Fully automated: creates VPSes, uploads binary, configures peering.
+# Deploys a mesh-hub fleet to any supported cloud provider.
 #
-# Prerequisites:
-#   1. Install hcloud CLI: brew install hcloud  (or https://github.com/hetznercloud/cli)
-#   2. Create API token: Hetzner Cloud Console → Project → Security → API Tokens
-#   3. Configure:  hcloud context create mesh-protocol
-#   4. Add SSH key: hcloud ssh-key create --name mesh-deploy --public-key-from-file ~/.ssh/id_ed25519.pub
-#   5. Build:      cargo build --release --bin mesh-hub
-#   6. Run:        ./deploy/fleet-deploy.sh
+# Usage:
+#   ./deploy/fleet-deploy.sh <provider> [command]
 #
-# Cost: ~$17/mo total for 4 regions worldwide
+# Providers:
+#   hetzner       — ~$4.50/mo per node (cheapest, requires ID verification)
+#   vultr         — ~$6/mo per node (no KYC, 32 locations)
+#   digitalocean  — ~$6/mo per node (no KYC, popular)
 #
-# To tear down:
-#   ./deploy/fleet-deploy.sh destroy
+# Commands:
+#   deploy        — Create servers and deploy hubs (default)
+#   destroy       — Tear down all servers
+#   status        — Show fleet status
+#   update        — Upload new binary and restart all hubs
+#
+# Examples:
+#   ./deploy/fleet-deploy.sh hetzner
+#   ./deploy/fleet-deploy.sh vultr deploy
+#   ./deploy/fleet-deploy.sh digitalocean status
+#   ./deploy/fleet-deploy.sh hetzner destroy
+#
+# Environment variables:
+#   MESH_REGIONS      — Space-separated list of regions (default: "us-east us-west eu-central ap-southeast")
+#   MESH_SERVER_TYPE  — Override server type/plan
+#   MESH_IMAGE        — Override OS image
+#   MESH_SSH_KEY      — Override SSH key name/ID
 
 set -euo pipefail
 
 # ============================================================================
-# Configuration
+# Arguments
 # ============================================================================
 
-SSH_KEY_NAME="mesh-deploy"       # Name of your hcloud SSH key
-SERVER_TYPE="cx22"               # 2 vCPU, 4GB RAM, 40GB disk (~$4.50/mo)
-IMAGE="debian-12"
-SSH_USER="root"
+PROVIDER="${1:-}"
+COMMAND="${2:-deploy}"
 
-declare -A REGIONS=(
-    ["us-east"]="ash"
-    ["us-west"]="hil"
-    ["eu-central"]="fsn1"
-    ["ap-southeast"]="sin"
-)
-
-# Deployment order — us-east is the seed, others chain from it
-DEPLOY_ORDER=("us-east" "us-west" "eu-central" "ap-southeast")
+if [ -z "$PROVIDER" ]; then
+    echo "Usage: fleet-deploy.sh <provider> [deploy|destroy|status|update]"
+    echo ""
+    echo "Providers:"
+    echo "  hetzner       ~\$4.50/node/mo  (ID verification required)"
+    echo "  vultr         ~\$6/node/mo     (credit card only)"
+    echo "  digitalocean  ~\$6/node/mo     (credit card only)"
+    echo ""
+    echo "Examples:"
+    echo "  fleet-deploy.sh vultr                    # deploy 4-region fleet"
+    echo "  fleet-deploy.sh vultr status             # check fleet health"
+    echo "  fleet-deploy.sh vultr update             # push new binary"
+    echo "  fleet-deploy.sh vultr destroy             # tear everything down"
+    exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 BINARY="$PROJECT_DIR/target/release/mesh-hub"
 
+# ── Load provider ────────────────────────────────────────────────────────────
+
+PROVIDER_FILE="$SCRIPT_DIR/providers/$PROVIDER.sh"
+if [ ! -f "$PROVIDER_FILE" ]; then
+    echo "ERROR: Unknown provider '$PROVIDER'"
+    echo "Available providers:"
+    for f in "$SCRIPT_DIR"/providers/*.sh; do
+        echo "  $(basename "$f" .sh)"
+    done
+    exit 1
+fi
+
+# shellcheck source=/dev/null
+source "$PROVIDER_FILE"
+
+# ── Regions ──────────────────────────────────────────────────────────────────
+
+IFS=' ' read -r -a DEPLOY_ORDER <<< "${MESH_REGIONS:-us-east us-west eu-central ap-southeast}"
+
 # ============================================================================
-# Functions
+# Shared functions
 # ============================================================================
 
 server_name() {
     echo "mesh-hub-$1"
 }
 
-get_server_ip() {
-    local name
-    name=$(server_name "$1")
-    hcloud server ip "$name" 2>/dev/null || echo ""
-}
-
 wait_for_ssh() {
     local ip="$1"
     local attempts=0
     echo -n "  Waiting for SSH..."
-    while ! ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=accept-new "$SSH_USER@$ip" true 2>/dev/null; do
+    while ! ssh -o ConnectTimeout=2 -o StrictHostKeyChecking=accept-new "$PROVIDER_SSH_USER@$ip" true 2>/dev/null; do
         attempts=$((attempts + 1))
         if [ $attempts -ge 30 ]; then
             echo " TIMEOUT"
@@ -73,96 +103,18 @@ wait_for_ssh() {
     echo " ready"
 }
 
-# ============================================================================
-# Destroy mode
-# ============================================================================
-
-if [ "${1:-}" = "destroy" ]; then
-    echo "=== Destroying Mesh Hub Fleet ==="
-    for region in "${DEPLOY_ORDER[@]}"; do
-        name=$(server_name "$region")
-        if hcloud server describe "$name" &>/dev/null; then
-            echo "  Deleting $name..."
-            hcloud server delete "$name"
-        else
-            echo "  $name not found, skipping"
-        fi
-    done
-    echo "Done."
-    exit 0
-fi
-
-# ============================================================================
-# Preflight checks
-# ============================================================================
-
-echo "=== Mesh Hub Fleet Deploy ==="
-
-if ! command -v hcloud &>/dev/null; then
-    echo "ERROR: hcloud CLI not found"
-    echo "Install: brew install hcloud"
-    echo "   or:   https://github.com/hetznercloud/cli"
-    exit 1
-fi
-
-if ! hcloud ssh-key describe "$SSH_KEY_NAME" &>/dev/null; then
-    echo "ERROR: SSH key '$SSH_KEY_NAME' not found in Hetzner Cloud"
-    echo "Add it: hcloud ssh-key create --name $SSH_KEY_NAME --public-key-from-file ~/.ssh/id_ed25519.pub"
-    exit 1
-fi
-
-if [ ! -f "$BINARY" ]; then
-    echo "Building mesh-hub..."
-    cd "$PROJECT_DIR"
-    cargo build --release --bin mesh-hub
-fi
-
-echo "  Binary: $(du -h "$BINARY" | cut -f1)"
-echo "  SSH key: $SSH_KEY_NAME"
-echo "  Server type: $SERVER_TYPE ($IMAGE)"
-echo ""
-
-# ============================================================================
-# Create servers
-# ============================================================================
-
-echo "=== Creating Servers ==="
-
-for region in "${DEPLOY_ORDER[@]}"; do
-    name=$(server_name "$region")
-    location="${REGIONS[$region]}"
-
-    if hcloud server describe "$name" &>/dev/null; then
-        ip=$(get_server_ip "$region")
-        echo "  $name already exists ($ip), skipping creation"
-    else
-        echo "  Creating $name in $location..."
-        hcloud server create \
-            --name "$name" \
-            --type "$SERVER_TYPE" \
-            --image "$IMAGE" \
-            --location "$location" \
-            --ssh-key "$SSH_KEY_NAME" \
-            --label "role=mesh-hub" \
-            --label "region=$region"
-
-        ip=$(get_server_ip "$region")
-        echo "  Created: $ip"
+ensure_binary() {
+    if [ ! -f "$BINARY" ]; then
+        echo "Building mesh-hub..."
+        cd "$PROJECT_DIR"
+        cargo build --release --bin mesh-hub
     fi
-done
+    echo "  Binary: $(du -h "$BINARY" | cut -f1)"
+}
 
-echo ""
-
-# ============================================================================
-# Deploy to each server
-# ============================================================================
-
-echo "=== Deploying Hubs ==="
-
-SEED_ADDR=""
-
-for region in "${DEPLOY_ORDER[@]}"; do
-    ip=$(get_server_ip "$region")
+deploy_to_server() {
+    local ip="$1" region="$2" seed_addr="$3"
+    local name
     name=$(server_name "$region")
 
     echo ""
@@ -170,83 +122,191 @@ for region in "${DEPLOY_ORDER[@]}"; do
 
     wait_for_ssh "$ip"
 
-    # Upload binary
     echo "  Uploading binary..."
-    scp -q "$BINARY" "$SSH_USER@$ip:/usr/local/bin/mesh-hub"
+    scp -q "$BINARY" "$PROVIDER_SSH_USER@$ip:/usr/local/bin/mesh-hub"
 
-    # Upload deploy scripts
     echo "  Uploading deploy scripts..."
-    ssh -q "$SSH_USER@$ip" "mkdir -p ~/deploy"
-    scp -q "$SCRIPT_DIR/setup-hetzner.sh" "$SCRIPT_DIR/mesh-hub.service" "$SSH_USER@$ip:~/deploy/"
+    ssh -q "$PROVIDER_SSH_USER@$ip" "mkdir -p ~/deploy"
+    scp -q "$SCRIPT_DIR/setup-node.sh" "$SCRIPT_DIR/mesh-hub.service" "$PROVIDER_SSH_USER@$ip:~/deploy/"
 
-    # Run setup
     echo "  Running setup..."
-    if [ -z "$SEED_ADDR" ]; then
-        ssh -t "$SSH_USER@$ip" "bash ~/deploy/setup-hetzner.sh $region" 2>&1 | sed 's/^/  /'
-        SEED_ADDR="$ip:4433"
+    if [ -z "$seed_addr" ]; then
+        ssh -t "$PROVIDER_SSH_USER@$ip" "bash ~/deploy/setup-node.sh $region" 2>&1 | sed 's/^/  /'
     else
-        ssh -t "$SSH_USER@$ip" "bash ~/deploy/setup-hetzner.sh $region $SEED_ADDR" 2>&1 | sed 's/^/  /'
+        ssh -t "$PROVIDER_SSH_USER@$ip" "bash ~/deploy/setup-node.sh $region $seed_addr" 2>&1 | sed 's/^/  /'
     fi
-done
+}
 
-# ============================================================================
-# Update SSRF allowlists — each hub needs to allow connections to all peers
-# ============================================================================
+update_allowlists() {
+    local all_addrs=()
+    local region name ip
 
-echo ""
-echo "=== Updating Peer Allowlists ==="
+    echo ""
+    echo "=== Updating Peer Allowlists ==="
 
-# Collect all hub addresses
-ALL_ADDRS=()
-for region in "${DEPLOY_ORDER[@]}"; do
-    ip=$(get_server_ip "$region")
-    ALL_ADDRS+=("$ip:4433")
-done
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+        ip=$(provider_get_server_ip "$name")
+        all_addrs+=("$ip:4433")
+    done
 
-ALLOWLIST_TOML=$(printf ', "%s"' "${ALL_ADDRS[@]}")
-ALLOWLIST_TOML="[${ALLOWLIST_TOML:2}]"  # trim leading ", "
+    local allowlist_toml
+    allowlist_toml=$(printf ', "%s"' "${all_addrs[@]}")
+    allowlist_toml="[${allowlist_toml:2}]"
 
-for region in "${DEPLOY_ORDER[@]}"; do
-    ip=$(get_server_ip "$region")
-    echo "  Updating $region ($ip)..."
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+        ip=$(provider_get_server_ip "$name")
+        echo "  Updating $region ($ip)..."
 
-    # Replace or insert outbound_allowlist in the config
-    ssh -q "$SSH_USER@$ip" "
-        if grep -q 'outbound_allowlist' /etc/mesh-hub/mesh-hub.toml; then
-            sed -i 's|outbound_allowlist = .*|outbound_allowlist = $ALLOWLIST_TOML|' /etc/mesh-hub/mesh-hub.toml
+        ssh -q "$PROVIDER_SSH_USER@$ip" "
+            if grep -q 'outbound_allowlist' /etc/mesh-hub/mesh-hub.toml; then
+                sed -i 's|outbound_allowlist = .*|outbound_allowlist = $allowlist_toml|' /etc/mesh-hub/mesh-hub.toml
+            else
+                sed -i '/\[security\]/a outbound_allowlist = $allowlist_toml' /etc/mesh-hub/mesh-hub.toml
+            fi
+            systemctl restart mesh-hub
+        "
+    done
+}
+
+print_status() {
+    local first_ip="" region name ip status
+
+    echo ""
+    echo "=============================================="
+    echo "  Mesh Hub Fleet — $PROVIDER_NAME"
+    echo "=============================================="
+    echo ""
+    printf "  %-16s %-22s %s\n" "Region" "Address" "Status"
+    printf "  %-16s %-22s %s\n" "──────────────" "────────────────────" "──────"
+
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+        ip=$(provider_get_server_ip "$name")
+        if [ -z "$ip" ]; then
+            status="not found"
         else
-            sed -i '/\[security\]/a outbound_allowlist = $ALLOWLIST_TOML' /etc/mesh-hub/mesh-hub.toml
+            status=$(ssh -q -o ConnectTimeout=3 "$PROVIDER_SSH_USER@$ip" "systemctl is-active mesh-hub" 2>/dev/null || echo "unreachable")
+            [ -z "$first_ip" ] && first_ip="$ip"
         fi
-        systemctl restart mesh-hub
-    "
-done
+        printf "  %-16s %-22s %s\n" "$region" "${ip:--}:4433" "$status"
+    done
+
+    echo ""
+    echo "  Peering: enabled (gossip every 60s)"
+    if [ -n "$first_ip" ]; then
+        echo ""
+        echo "  Connect an agent:"
+        echo "    mesh-node publish --type 'compute/inference/text-generation' \\"
+        echo "      --endpoint 'https://my-agent.example.com/v1/generate' \\"
+        echo "      --seed $first_ip:4433"
+    fi
+    echo ""
+}
 
 # ============================================================================
-# Summary
+# Commands
 # ============================================================================
 
-echo ""
-echo "=============================================="
-echo "  Mesh Hub Fleet — Online"
-echo "=============================================="
-echo ""
-echo "  Region           Address              Status"
-echo "  ─────────────    ──────────────────    ──────"
-for region in "${DEPLOY_ORDER[@]}"; do
-    ip=$(get_server_ip "$region")
-    status=$(ssh -q "$SSH_USER@$ip" "systemctl is-active mesh-hub" 2>/dev/null || echo "unknown")
-    printf "  %-16s %-20s %s\n" "$region" "$ip:4433" "$status"
-done
-echo ""
-echo "  Peering:   enabled (gossip every 60s)"
-echo "  Seed hub:  $(get_server_ip us-east):4433"
-echo ""
-echo "  Connect an agent:"
-echo "    mesh-node publish --type 'compute/inference/text-generation' \\"
-echo "      --endpoint 'https://my-agent.example.com/v1/generate' \\"
-echo "      --seed $(get_server_ip us-east):4433"
-echo ""
-echo "  Monthly cost: ~\$17 (4x CX22)"
-echo ""
-echo "  Tear down: ./deploy/fleet-deploy.sh destroy"
-echo ""
+cmd_deploy() {
+    echo "=== Mesh Hub Fleet Deploy ($PROVIDER_NAME) ==="
+    echo ""
+
+    provider_preflight
+    ensure_binary
+
+    echo ""
+    echo "  Regions: ${DEPLOY_ORDER[*]}"
+    echo ""
+
+    # Create servers
+    echo "=== Creating Servers ==="
+    local region name ip
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+
+        if provider_server_exists "$name"; then
+            ip=$(provider_get_server_ip "$name")
+            echo "  $name already exists ($ip), skipping"
+        else
+            echo "  Creating $name in $region..."
+            ip=$(provider_create_server "$name" "$region")
+            echo "  Created: $ip"
+        fi
+    done
+
+    # Deploy to each server
+    echo ""
+    echo "=== Deploying Hubs ==="
+
+    local seed_addr=""
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+        ip=$(provider_get_server_ip "$name")
+        deploy_to_server "$ip" "$region" "$seed_addr"
+        [ -z "$seed_addr" ] && seed_addr="$ip:4433"
+    done
+
+    update_allowlists
+    print_status
+}
+
+cmd_destroy() {
+    echo "=== Destroying Mesh Hub Fleet ($PROVIDER_NAME) ==="
+    local region name
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+        if provider_server_exists "$name"; then
+            echo "  Deleting $name..."
+            provider_delete_server "$name"
+        else
+            echo "  $name not found, skipping"
+        fi
+    done
+    echo "Done."
+}
+
+cmd_status() {
+    provider_preflight
+    print_status
+}
+
+cmd_update() {
+    echo "=== Updating Mesh Hub Fleet ($PROVIDER_NAME) ==="
+    provider_preflight
+    ensure_binary
+
+    local region name ip
+    for region in "${DEPLOY_ORDER[@]}"; do
+        name=$(server_name "$region")
+        ip=$(provider_get_server_ip "$name")
+
+        if [ -z "$ip" ]; then
+            echo "  $name not found, skipping"
+            continue
+        fi
+
+        echo "  Updating $region ($ip)..."
+        wait_for_ssh "$ip"
+        scp -q "$BINARY" "$PROVIDER_SSH_USER@$ip:/usr/local/bin/mesh-hub"
+        ssh -q "$PROVIDER_SSH_USER@$ip" "systemctl restart mesh-hub"
+        echo "  Restarted"
+    done
+
+    print_status
+}
+
+# ── Dispatch ─────────────────────────────────────────────────────────────────
+
+case "$COMMAND" in
+    deploy)  cmd_deploy  ;;
+    destroy) cmd_destroy ;;
+    status)  cmd_status  ;;
+    update)  cmd_update  ;;
+    *)
+        echo "Unknown command: $COMMAND"
+        echo "Commands: deploy, destroy, status, update"
+        exit 1
+        ;;
+esac
