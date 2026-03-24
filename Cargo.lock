@@ -927,7 +927,7 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "mars-client"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ciborium",
  "clap",
@@ -962,7 +962,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "mesh-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "blake3",
  "bs58",
@@ -977,7 +977,7 @@ dependencies = [
 
 [[package]]
 name = "mesh-dht"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ciborium",
  "mesh-core",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "mesh-gateway"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "ciborium",
@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "mesh-hub"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "blake3",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "mesh-node"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "ciborium",
@@ -1055,14 +1055,14 @@ dependencies = [
 
 [[package]]
 name = "mesh-schemas"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "mesh-core",
 ]
 
 [[package]]
 name = "mesh-transport"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "mesh-core",
  "quinn",

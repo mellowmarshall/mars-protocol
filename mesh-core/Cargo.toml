@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Wire types, CBOR serialization, Ed25519 identity, and content-addressed hashing for the MARS protocol"
+readme = "../README.md"
 
 [dependencies]
 ciborium = { workspace = true }

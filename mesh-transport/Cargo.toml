@@ -5,9 +5,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "QUIC transport with mutual TLS for the MARS protocol"
+readme = "../README.md"
 
 [dependencies]
-mesh-core = { path = "../mesh-core", version = "0.1.0" }
+mesh-core = { path = "../mesh-core", version = "0.1.1" }
 quinn = { workspace = true }
 rustls = { workspace = true }
 rcgen = { workspace = true }

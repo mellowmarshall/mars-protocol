@@ -9,8 +9,8 @@ name = "mesh-gateway"
 path = "src/main.rs"
 
 [dependencies]
-mesh-core = { path = "../mesh-core", version = "0.1.0" }
-mars-client = { path = "../mesh-client", version = "0.1.0" }
+mesh-core = { path = "../mesh-core", version = "0.1.1" }
+mars-client = { path = "../mesh-client", version = "0.1.1" }
 
 axum = "0.8"
 ciborium = { workspace = true }

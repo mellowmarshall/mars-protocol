@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Well-known schema hashes and routing key constants for the MARS protocol"
+readme = "../README.md"
 
 [dependencies]
-mesh-core = { path = "../mesh-core", version = "0.1.0" }
+mesh-core = { path = "../mesh-core", version = "0.1.1" }
