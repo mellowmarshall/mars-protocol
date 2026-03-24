@@ -29,9 +29,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/marshallbrett/mesh-protocol"
-Repository = "https://github.com/marshallbrett/mesh-protocol"
-Issues = "https://github.com/marshallbrett/mesh-protocol/issues"
+Homepage = "https://github.com/mellowmarshall/mars-protocol"
+Repository = "https://github.com/mellowmarshall/mars-protocol"
+Issues = "https://github.com/mellowmarshall/mars-protocol/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mesh_protocol"]

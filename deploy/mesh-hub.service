@@ -1,6 +1,6 @@
 [Unit]
 Description=Mesh Protocol Hub
-Documentation=https://github.com/marshallbrett/mesh-protocol
+Documentation=https://github.com/mellowmarshall/mars-protocol
 After=network-online.target
 Wants=network-online.target
 

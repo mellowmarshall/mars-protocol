@@ -1,6 +1,6 @@
 # mesh-mcp-bridge
 
-Bidirectional bridge between [MCP](https://modelcontextprotocol.io/) servers and the [MARS protocol](https://github.com/marshallbrett/mars-protocol) network.
+Bidirectional bridge between [MCP](https://modelcontextprotocol.io/) servers and the [MARS protocol](https://github.com/mellowmarshall/mars-protocol) network.
 It publishes MCP server capabilities as mesh descriptors **and** exposes mesh capabilities to MCP-compatible agents as standard MCP tools.
 
 ## Install
@@ -84,6 +84,6 @@ to the endpoint recorded in the descriptor.
 
 ## Links
 
-- [mars-protocol](https://github.com/marshallbrett/mars-protocol)
+- [mars-protocol](https://github.com/mellowmarshall/mars-protocol)
 - [Model Context Protocol](https://modelcontextprotocol.io/)
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)

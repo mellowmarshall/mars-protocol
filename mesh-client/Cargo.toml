@@ -5,7 +5,7 @@ edition.workspace = true
 description = "High-level client library for the Capability Mesh Protocol"
 keywords = ["mesh", "dht", "p2p", "capability-discovery", "agents"]
 categories = ["network-programming", "cryptography"]
-repository = "https://github.com/marshallbrett/mesh-protocol"
+repository = "https://github.com/mellowmarshall/mars-protocol"
 
 [dependencies]
 mesh-core = { path = "../mesh-core" }

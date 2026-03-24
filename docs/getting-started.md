@@ -8,7 +8,7 @@
 ## Build
 
 ```bash
-git clone https://github.com/marshallbrett/mars-protocol.git && cd mars-protocol
+git clone https://github.com/mellowmarshall/mars-protocol.git && cd mars-protocol
 cargo build --release
 ```
 

@@ -1,6 +1,6 @@
 # mars-protocol
 
-Python client for the [Mesh Agent Routing Standard](https://github.com/marshallbrett/mars-protocol). A thin wrapper around the mesh-gateway HTTP API that lets you publish and discover capabilities on the decentralized mesh network.
+Python client for the [Mesh Agent Routing Standard](https://github.com/mellowmarshall/mars-protocol). A thin wrapper around the mesh-gateway HTTP API that lets you publish and discover capabilities on the decentralized mesh network.
 
 ## Install
 
@@ -83,5 +83,5 @@ MIT OR Apache-2.0
 
 ## Links
 
-- [MARS Protocol repository](https://github.com/marshallbrett/mars-protocol)
-- [Protocol specification](https://github.com/marshallbrett/mars-protocol/blob/main/PROTOCOL.md)
+- [MARS Protocol repository](https://github.com/mellowmarshall/mars-protocol)
+- [Protocol specification](https://github.com/mellowmarshall/mars-protocol/blob/main/PROTOCOL.md)

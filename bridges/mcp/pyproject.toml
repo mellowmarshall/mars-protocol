@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/marshallbrett/mesh-protocol"
+Repository = "https://github.com/mellowmarshall/mars-protocol"
 
 [project.scripts]
 mesh-mcp-bridge = "mesh_mcp_bridge.cli:main"
