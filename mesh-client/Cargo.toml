@@ -2,6 +2,7 @@
 name = "mesh-client"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 description = "High-level client library for the Capability Mesh Protocol"
 keywords = ["mesh", "dht", "p2p", "capability-discovery", "agents"]
 categories = ["network-programming", "cryptography"]

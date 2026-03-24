@@ -2,6 +2,9 @@
 name = "mesh-dht"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Kademlia DHT with iterative lookup and descriptor storage for the MARS protocol"
 
 [dependencies]
 mesh-core = { path = "../mesh-core" }

@@ -2,6 +2,9 @@
 name = "mesh-schemas"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Well-known schema hashes and routing key constants for the MARS protocol"
 
 [dependencies]
 mesh-core = { path = "../mesh-core" }
