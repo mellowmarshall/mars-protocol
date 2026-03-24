@@ -4,9 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-mesh-core = { path = "../mesh-core" }
-mesh-transport = { path = "../mesh-transport" }
-mesh-dht = { path = "../mesh-dht" }
+mesh-core = { path = "../mesh-core", version = "0.1.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.1.0" }
+mesh-dht = { path = "../mesh-dht", version = "0.1.0" }
 tokio = { workspace = true }
 clap = { workspace = true }
 tracing = { workspace = true }

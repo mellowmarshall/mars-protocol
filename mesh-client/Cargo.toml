@@ -9,9 +9,9 @@ categories = ["network-programming", "cryptography"]
 repository = "https://github.com/mellowmarshall/mars-protocol"
 
 [dependencies]
-mesh-core = { path = "../mesh-core" }
-mesh-dht = { path = "../mesh-dht" }
-mesh-transport = { path = "../mesh-transport" }
+mesh-core = { path = "../mesh-core", version = "0.1.0" }
+mesh-dht = { path = "../mesh-dht", version = "0.1.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.1.0" }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

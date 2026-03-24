@@ -8,10 +8,10 @@ name = "mesh-hub"
 path = "src/main.rs"
 
 [dependencies]
-mesh-core = { path = "../mesh-core" }
-mesh-dht = { path = "../mesh-dht" }
-mesh-transport = { path = "../mesh-transport" }
-mesh-schemas = { path = "../mesh-schemas" }
+mesh-core = { path = "../mesh-core", version = "0.1.0" }
+mesh-dht = { path = "../mesh-dht", version = "0.1.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.1.0" }
+mesh-schemas = { path = "../mesh-schemas", version = "0.1.0" }
 
 # Storage
 redb = "2"

@@ -7,8 +7,8 @@ repository.workspace = true
 description = "Kademlia DHT with iterative lookup and descriptor storage for the MARS protocol"
 
 [dependencies]
-mesh-core = { path = "../mesh-core" }
-mesh-transport = { path = "../mesh-transport" }
+mesh-core = { path = "../mesh-core", version = "0.1.0" }
+mesh-transport = { path = "../mesh-transport", version = "0.1.0" }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

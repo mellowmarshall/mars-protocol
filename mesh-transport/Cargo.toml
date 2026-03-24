@@ -7,7 +7,7 @@ repository.workspace = true
 description = "QUIC transport with mutual TLS for the MARS protocol"
 
 [dependencies]
-mesh-core = { path = "../mesh-core" }
+mesh-core = { path = "../mesh-core", version = "0.1.0" }
 quinn = { workspace = true }
 rustls = { workspace = true }
 rcgen = { workspace = true }

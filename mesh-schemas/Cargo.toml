@@ -7,4 +7,4 @@ repository.workspace = true
 description = "Well-known schema hashes and routing key constants for the MARS protocol"
 
 [dependencies]
-mesh-core = { path = "../mesh-core" }
+mesh-core = { path = "../mesh-core", version = "0.1.0" }
