@@ -3,3 +3,4 @@
 # Build artifacts
 sdks/python/dist/
 bridges/mcp/dist/
+__pycache__/
