@@ -8,6 +8,7 @@ members = [
     "mesh-client",
     "mesh-node",
     "mesh-hub",
+    "mesh-gateway",
 ]
 
 [workspace.package]

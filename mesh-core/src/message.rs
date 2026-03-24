@@ -16,6 +16,16 @@ pub struct NodeAddr {
     pub address: String,
 }
 
+impl NodeAddr {
+    /// Create a QUIC node address from an address string (e.g., "198.51.100.42:4433").
+    pub fn quic(address: &str) -> Self {
+        Self {
+            protocol: "quic".into(),
+            address: address.to_string(),
+        }
+    }
+}
+
 /// Information about a known node (used in FIND_NODE_RESULT, FIND_VALUE_RESULT).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeInfo {

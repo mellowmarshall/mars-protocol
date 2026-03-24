@@ -2,6 +2,10 @@
 name = "mesh-client"
 version.workspace = true
 edition.workspace = true
+description = "High-level client library for the Capability Mesh Protocol"
+keywords = ["mesh", "dht", "p2p", "capability-discovery", "agents"]
+categories = ["network-programming", "cryptography"]
+repository = "https://github.com/marshallbrett/mesh-protocol"
 
 [dependencies]
 mesh-core = { path = "../mesh-core" }
@@ -10,3 +14,8 @@ mesh-transport = { path = "../mesh-transport" }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+ciborium = { workspace = true }
+
+[dev-dependencies]
+clap = { workspace = true }
+tokio = { workspace = true }

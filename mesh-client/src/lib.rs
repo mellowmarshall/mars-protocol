@@ -2,20 +2,31 @@
 //!
 //! Bundles identity, transport, and DHT into a single [`MeshClient`] that
 //! handles bootstrap, publish, discover, and ping operations.
+//!
+//! # Re-exports
+//!
+//! Core types are re-exported so users don't need to depend on `mesh-core` directly.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use mesh_core::frame::{MSG_PING, MSG_PONG, MSG_STORE, MSG_STORE_ACK};
-use mesh_core::identity::Keypair;
-use mesh_core::message::{NodeAddr, Ping, Pong, Store, StoreAck, from_cbor, to_cbor};
-use mesh_core::{Descriptor, Frame, Hash};
+use mesh_core::message::{Ping, Pong, Store, StoreAck, from_cbor, to_cbor};
+use mesh_core::Frame;
 use mesh_dht::node::DhtConfig;
 use mesh_dht::storage::DescriptorStore;
 use mesh_dht::transport::{Transport, TransportError};
 use mesh_dht::DhtNode;
 use mesh_transport::{MeshConnection, MeshEndpoint};
+
+// Re-export core types so users don't need to depend on mesh-core directly.
+pub use mesh_core::hash::schema_hash;
+pub use mesh_core::identity::{Identity, Keypair};
+pub use mesh_core::message::NodeAddr;
+pub use mesh_core::routing::{hierarchical_routing_keys, routing_key};
+pub use mesh_core::{Descriptor, Hash};
 
 /// A high-level mesh client that wraps identity, transport, and DHT.
 pub struct MeshClient {
@@ -75,6 +86,69 @@ impl MeshClient {
         } else {
             Err(ClientError::UnexpectedResponse(resp.msg_type))
         }
+    }
+
+    /// Publish a capability to the mesh, handling CBOR encoding, routing keys,
+    /// and timestamps internally.
+    ///
+    /// This is the high-level convenience method for publishing capabilities.
+    /// For full control over the descriptor, use [`publish()`](Self::publish) directly.
+    pub async fn publish_capability(
+        &mut self,
+        cap_type: &str,
+        endpoint: &str,
+        params: Option<&str>,
+        target: &NodeAddr,
+    ) -> Result<StoreAck, ClientError> {
+        // Build capability payload as deterministic CBOR (per Section 5.2)
+        let payload = {
+            let mut map = std::collections::BTreeMap::new();
+            map.insert(
+                "endpoint".to_string(),
+                ciborium::Value::Text(endpoint.to_string()),
+            );
+            if let Some(p) = params {
+                map.insert(
+                    "params".to_string(),
+                    ciborium::Value::Text(p.to_string()),
+                );
+            }
+            map.insert(
+                "type".to_string(),
+                ciborium::Value::Text(cap_type.to_string()),
+            );
+            ciborium::Value::Map(
+                map.into_iter()
+                    .map(|(k, v)| (ciborium::Value::Text(k), v))
+                    .collect(),
+            )
+        };
+        let mut payload_bytes = Vec::new();
+        ciborium::into_writer(&payload, &mut payload_bytes)
+            .map_err(|e| ClientError::Codec(e.to_string()))?;
+
+        // Compute hierarchical routing keys from capability type
+        let rkeys = hierarchical_routing_keys(cap_type);
+
+        // Current timestamp in microseconds
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64;
+
+        let descriptor = Descriptor::create(
+            self.node.keypair(),
+            schema_hash("core/capability"),
+            cap_type.to_string(),
+            payload_bytes,
+            now,
+            1,
+            3600,
+            rkeys,
+        )
+        .map_err(|e| ClientError::Codec(e.to_string()))?;
+
+        self.publish(descriptor, target).await
     }
 
     /// Discover descriptors at a routing key via iterative Kademlia lookup.
