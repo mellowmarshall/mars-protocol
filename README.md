@@ -84,6 +84,28 @@ cargo build --release
 
 See the [Getting Started Guide](docs/getting-started.md) for multi-node setup and hub deployment.
 
+### For non-Rust agents (Python, TypeScript, Go, etc.)
+
+Run the HTTP gateway and use simple REST calls:
+
+```bash
+# Start the gateway (connects to mesh via QUIC, exposes HTTP)
+./target/release/mesh-gateway --seed 127.0.0.1:4433 --listen 0.0.0.0:3000
+```
+
+```python
+# Python agent publishes a capability
+requests.post("http://localhost:3000/v1/publish", json={
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://my-agent.example.com/v1/generate",
+    "params": {"model": "llama-3.3-70b"}
+})
+
+# Another agent discovers it
+r = requests.get("http://localhost:3000/v1/discover?type=compute/inference")
+print(r.json()["descriptors"])
+```
+
 ---
 
 ## Architecture
@@ -103,6 +125,7 @@ See the [Getting Started Guide](docs/getting-started.md) for multi-node setup an
 | **mesh-client** | High-level client library (`MeshClient` — bootstrap, publish, discover, ping) |
 | **mesh-node** | CLI binary — run a mesh node, publish/discover capabilities |
 | **mesh-hub** | Production hub — redb storage, multi-tenant, admin API, peering, metrics |
+| **mesh-gateway** | HTTP/JSON gateway — lets Python, TypeScript, Go agents use the mesh |
 
 </td>
 <td width="50%">
