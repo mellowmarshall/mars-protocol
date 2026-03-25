@@ -91,6 +91,45 @@ def detect_ollama_models(ollama_url: str = "http://localhost:11434") -> list[dic
         return []
 
 
+# ── Ngrok Tunnel ──────────────────────────────────────────────────────
+
+
+def start_ngrok(port: int = 11434) -> str | None:
+    """Start an ngrok tunnel to the given port and return the public URL.
+
+    Returns None if ngrok isn't installed or fails to start.
+    """
+    try:
+        subprocess.run(["ngrok", "version"], capture_output=True, timeout=5, check=True)
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        return None
+
+    log.info("Starting ngrok tunnel to port %d...", port)
+
+    # Start ngrok in background
+    proc = subprocess.Popen(
+        ["ngrok", "http", str(port), "--log=stdout", "--log-format=json"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+    # Wait for tunnel to establish, then query the local API
+    for attempt in range(15):
+        time.sleep(1)
+        try:
+            r = httpx.get("http://127.0.0.1:4040/api/tunnels", timeout=3)
+            tunnels = r.json().get("tunnels", [])
+            for t in tunnels:
+                public_url = t.get("public_url", "")
+                if public_url.startswith("https://"):
+                    log.info("Ngrok tunnel established: %s", public_url)
+                    return public_url
+        except Exception:
+            continue
+
+    log.warning("Ngrok started but no tunnel URL found")
+    return None
+
+
 # ── Descriptor Publishing ─────────────────────────────────────────────
 
 
@@ -169,7 +208,9 @@ def main() -> None:
     parser.add_argument("--gateway", required=True, help="Mesh gateway URL")
     parser.add_argument("--ollama", default="http://localhost:11434", help="Ollama API URL")
     parser.add_argument("--endpoint", default=None,
-                        help="Public endpoint for this provider (default: ollama URL)")
+                        help="Public endpoint for this provider (default: auto-detect via ngrok)")
+    parser.add_argument("--no-ngrok", action="store_true",
+                        help="Don't auto-start ngrok tunnel (use --endpoint or localhost)")
     parser.add_argument("--price", type=float, default=0.0,
                         help="Price per 1K tokens in USD (0 = free)")
     parser.add_argument("--region", default="unknown", help="Provider region (e.g. us-east)")
@@ -179,7 +220,21 @@ def main() -> None:
                         help="Seconds between re-publish cycles (default: 1800)")
     args = parser.parse_args()
 
-    endpoint = args.endpoint or args.ollama
+    # Determine public endpoint
+    if args.endpoint:
+        endpoint = args.endpoint
+    elif not args.no_ngrok:
+        # Auto-start ngrok tunnel for zero-config public access
+        ollama_port = int(args.ollama.rsplit(":", 1)[-1])
+        ngrok_url = start_ngrok(ollama_port)
+        if ngrok_url:
+            endpoint = ngrok_url
+        else:
+            log.warning("Ngrok not available — using localhost (only reachable locally)")
+            log.warning("Install ngrok: https://ngrok.com/download or use --endpoint")
+            endpoint = args.ollama
+    else:
+        endpoint = args.ollama
 
     # Detect hardware
     log.info("Detecting hardware...")
