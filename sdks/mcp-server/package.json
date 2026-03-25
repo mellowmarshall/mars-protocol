@@ -1,0 +1,30 @@
+{
+  "name": "mars-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server that discovers tools from the MARS mesh network — 65+ AI services instantly available to any MCP client",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mars-mcp-server": "dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["mcp", "model-context-protocol", "mars", "mesh", "dht", "ai-agents", "tool-discovery"],
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mellowmarshall/mars-protocol"
+  },
+  "homepage": "https://github.com/mellowmarshall/mars-protocol",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
