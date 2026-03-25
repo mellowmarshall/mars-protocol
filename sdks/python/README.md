@@ -84,4 +84,4 @@ MIT OR Apache-2.0
 ## Links
 
 - [MARS Protocol repository](https://github.com/mellowmarshall/mars-protocol)
-- [Protocol specification](https://github.com/mellowmarshall/mars-protocol/blob/main/PROTOCOL.md)
+- [Protocol specification](https://github.com/mellowmarshall/mars-protocol/blob/master/PROTOCOL.md)

@@ -6,9 +6,12 @@
 
 A decentralized capability discovery network for autonomous agents
 
-[![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+[![License: MIT/Apache-2.0](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](https://github.com/mellowmarshall/mars-protocol/blob/master/LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024_edition-orange.svg)](https://www.rust-lang.org/)
-[![Protocol Version](https://img.shields.io/badge/protocol-v0.1.0--draft-green.svg)](PROTOCOL.md)
+[![Protocol Version](https://img.shields.io/badge/protocol-v0.1.0--draft-green.svg)](https://github.com/mellowmarshall/mars-protocol/blob/master/PROTOCOL.md)
+[![PyPI](https://img.shields.io/pypi/v/mesh-protocol)](https://pypi.org/project/mesh-protocol/)
+[![npm](https://img.shields.io/npm/v/mars-protocol)](https://www.npmjs.com/package/mars-protocol)
+[![crates.io](https://img.shields.io/crates/v/mars-client)](https://crates.io/crates/mars-client)
 
 <br>
 
@@ -18,7 +21,7 @@ A decentralized capability discovery network for autonomous agents
 
 <br>
 
-[Wire Spec](PROTOCOL.md) · [Getting Started](docs/getting-started.md) · [Operator Guide](docs/operator-guide.md) · [Examples](examples/)
+[Wire Spec](https://github.com/mellowmarshall/mars-protocol/blob/master/PROTOCOL.md) · [Getting Started](https://github.com/mellowmarshall/mars-protocol/blob/master/docs/getting-started.md) · [Operator Guide](https://github.com/mellowmarshall/mars-protocol/blob/master/docs/operator-guide.md) · [Examples](https://github.com/mellowmarshall/mars-protocol/tree/master/examples)
 
 </div>
 
@@ -26,7 +29,7 @@ A decentralized capability discovery network for autonomous agents
 
 ## Live Network
 
-The MARS mesh is live. Connect to any hub to join:
+The MARS mesh is live with 65+ services. Connect to any hub:
 
 | Hub | Address | Location |
 |-----|---------|----------|
@@ -34,6 +37,126 @@ The MARS mesh is live. Connect to any hub to join:
 | **us-west** | `5.78.197.92:4433` | Hillsboro, OR |
 | **eu-central** | `46.225.55.16:4433` | Nuremberg, DE |
 | **ap-southeast** | `5.223.69.128:4433` | Singapore |
+
+---
+
+## Quick Start — Pick Your Path
+
+### Python (easiest)
+
+```bash
+pip install mesh-protocol
+```
+
+```python
+from mesh_protocol import MeshClient
+
+# Connect via a local gateway
+with MeshClient("http://localhost:3000") as client:
+    # Discover AI search providers
+    providers = client.discover("data/search")
+    for p in providers:
+        print(f"{p.type} -> {p.endpoint}")
+
+    # Discover LLM inference endpoints
+    llms = client.discover("compute/inference/text-generation")
+
+    # Publish your own capability
+    client.publish(
+        "compute/analysis/code-review",
+        endpoint="https://my-agent.example.com/review",
+        params={"languages": ["rust", "python"]},
+    )
+```
+
+### TypeScript / JavaScript
+
+```bash
+npm install mars-protocol
+```
+
+```typescript
+import { MeshClient } from "mars-protocol";
+
+const client = new MeshClient("http://localhost:3000");
+const providers = await client.discover("compute/inference");
+await client.publish("compute/analysis/code-review", {
+    endpoint: "https://my-agent.example.com/review",
+});
+```
+
+### Rust (native, no gateway needed)
+
+```bash
+cargo add mars-client
+```
+
+```rust
+let mut client = MeshClient::new(keypair, bind_addr).await?;
+client.bootstrap(&[NodeAddr::quic("5.161.53.251:4433")]).await?;
+client.publish_capability("compute/inference/text-generation",
+    "https://my-agent.example.com/generate", None, &seed).await?;
+let results = client.discover(&routing_key("compute/inference")).await?;
+```
+
+### HTTP (any language)
+
+```bash
+# Start the gateway
+./mesh-gateway --seed 5.161.53.251:4433 --listen 0.0.0.0:3000
+
+# Publish
+curl -X POST http://localhost:3000/v1/publish \
+  -H "Content-Type: application/json" \
+  -d '{"type":"compute/inference/text-generation","endpoint":"https://..."}'
+
+# Discover
+curl http://localhost:3000/v1/discover?type=compute/inference
+```
+
+---
+
+## Share Your GPU
+
+Turn any machine with a GPU into a mesh inference provider:
+
+```bash
+# Install Ollama + pull a model
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.3
+
+# Share your GPU (auto-detects hardware, starts ngrok tunnel, publishes to mesh)
+pip install httpx
+python tools/gpu-provider/provider.py --gateway http://localhost:3000
+```
+
+Other agents discover your GPU instantly:
+```python
+providers = client.discover("compute/inference/text-generation")
+# → "llama3.3:latest (NVIDIA GeForce RTX 3090)" — free, us-east
+```
+
+See [GPU Provider docs](https://github.com/mellowmarshall/mars-protocol/tree/master/tools/gpu-provider) for pricing, regions, and networking options.
+
+---
+
+## Bridges
+
+Connect existing ecosystems to the mesh:
+
+| Bridge | Install | What it does |
+|--------|---------|-------------|
+| **[MCP Bridge](https://github.com/mellowmarshall/mars-protocol/tree/master/bridges/mcp)** | `pip install mesh-mcp-bridge` | Publish MCP server tools → mesh. Discover mesh capabilities as MCP tools. |
+| **[OpenAPI Bridge](https://github.com/mellowmarshall/mars-protocol/tree/master/bridges/openapi)** | `pip install httpx pyyaml` | Point at any Swagger/OpenAPI spec → register all endpoints on mesh. |
+
+```bash
+# Publish an MCP server's tools to the mesh
+mesh-mcp-bridge publish --gateway http://localhost:3000 --mcp-server "python my_server.py"
+
+# Register an entire REST API from its OpenAPI spec
+python bridges/openapi/openapi_bridge.py --gateway http://localhost:3000 \
+    --spec https://petstore.swagger.io/v2/swagger.json
+```
 
 ---
 
@@ -53,117 +176,6 @@ Every AI agent framework reinvents service discovery. MCP servers need manual co
 └──────────────┘         └──────────────┘         └──────────────┘
 ```
 
-- **Publish** a signed descriptor saying what you can do
-- **Discover** capabilities by type, with hierarchical routing (`compute/inference/text-generation`)
-- **Verify** that a descriptor was actually published by who it claims — Ed25519 signatures, no trust required
-
-## Design Principles
-
-> *This protocol is designed to outlast its creators.*
-
-1. **No opinions about capabilities.** The mesh routes content-addressed descriptors. What they mean is up to you.
-2. **The core never changes.** Evolution happens in payload schemas.
-3. **Every identifier is a content-hash.** No registries, no DNS, no authorities.
-4. **Cryptographic identity everywhere.** Descriptors are self-authenticating. Transport uses mutual TLS.
-5. **Algorithm agility.** No hardcoded cryptography. Hash algorithms are versioned.
-6. **No global state.** Eventually consistent. Scales to billions.
-
----
-
-## Quick Start
-
-```bash
-# Build everything
-cargo build --release
-
-# Generate an identity
-./target/release/mesh-node identity --generate --path my-agent.key
-
-# Start a node (connects to the live mesh)
-./target/release/mesh-node start --listen 0.0.0.0:4433 --identity my-agent.key
-
-# Publish a capability
-./target/release/mesh-node publish \
-    --type "compute/inference/text-generation" \
-    --endpoint "https://my-agent.example.com/v1/generate" \
-    --params '{"model":"llama-3.3-70b","max_tokens":4096}' \
-    --seed 5.161.53.251:4433 \
-    --identity my-agent.key
-
-# Discover capabilities
-./target/release/mesh-node discover \
-    --type "compute/inference" \
-    --seed 5.161.53.251:4433 \
-    --identity my-agent.key
-```
-
-See the [Getting Started Guide](docs/getting-started.md) for multi-node setup and hub deployment.
-
-### Python SDK (easiest onramp)
-
-```bash
-pip install mesh-protocol
-```
-
-```python
-from mesh_protocol import MeshClient
-
-# Connect via a local gateway (or any gateway endpoint)
-with MeshClient("http://localhost:3000") as client:
-    # Publish a capability
-    client.publish(
-        "compute/inference/text-generation",
-        endpoint="https://my-agent.example.com/v1/generate",
-        params={"model": "llama-3.3-70b"},
-    )
-
-    # Discover capabilities
-    providers = client.discover("compute/inference")
-    for p in providers:
-        print(f"{p.type} -> {p.endpoint}")
-```
-
-### For non-Rust agents (Python, TypeScript, Go, etc.)
-
-Run the HTTP gateway and use simple REST calls:
-
-```bash
-# Start the gateway (connects to mesh via QUIC, exposes HTTP)
-./target/release/mesh-gateway --seed 5.161.53.251:4433 --listen 0.0.0.0:3000
-```
-
-```python
-# Python agent publishes a capability
-requests.post("http://localhost:3000/v1/publish", json={
-    "type": "compute/inference/text-generation",
-    "endpoint": "https://my-agent.example.com/v1/generate",
-    "params": {"model": "llama-3.3-70b"}
-})
-
-# Another agent discovers it
-r = requests.get("http://localhost:3000/v1/discover?type=compute/inference")
-print(r.json()["descriptors"])
-```
-
-### MCP Bridge
-
-Publish MCP server tools to the mesh and discover mesh capabilities as MCP tools:
-
-```bash
-pip install mesh-mcp-bridge
-
-# Publish your MCP server's tools to the mesh
-mesh-mcp-bridge publish \
-  --gateway http://localhost:3000 \
-  --mcp-server "python my_mcp_server.py" \
-  --name "my-tools"
-
-# Expose mesh capabilities as MCP tools
-mesh-mcp-bridge serve \
-  --gateway http://localhost:3000 \
-  --transport stdio
-```
-
 ---
 
 ## Architecture
@@ -180,10 +192,10 @@ mesh-mcp-bridge serve \
 | **mesh-transport** | QUIC transport with mutual TLS (Ed25519 self-signed certs) |
 | **mesh-dht** | Kademlia DHT — routing table, iterative lookup, descriptor storage |
 | **mesh-schemas** | Well-known schema hashes and routing key constants |
-| **mesh-client** | High-level client library (`MeshClient` — bootstrap, publish, discover, ping) |
+| **mars-client** | High-level client library (`MeshClient` — bootstrap, publish, discover, ping) |
 | **mesh-node** | CLI binary — run a mesh node, publish/discover capabilities |
 | **mesh-hub** | Production hub — redb storage, multi-tenant, admin API, peering, metrics |
-| **mesh-gateway** | HTTP/JSON gateway — lets Python, TypeScript, Go agents use the mesh |
+| **mesh-gateway** | HTTP/JSON gateway — lets any language use the mesh |
 
 </td>
 <td width="50%">
@@ -212,6 +224,16 @@ mesh-mcp-bridge serve \
 </tr>
 </table>
 
+### SDKs & Bridges
+
+| Package | Language | Install | Docs |
+|---------|----------|---------|------|
+| **mars-client** | Rust | `cargo add mars-client` | [crates.io](https://crates.io/crates/mars-client) |
+| **mesh-protocol** | Python | `pip install mesh-protocol` | [PyPI](https://pypi.org/project/mesh-protocol/) |
+| **mars-protocol** | TypeScript | `npm install mars-protocol` | [npm](https://www.npmjs.com/package/mars-protocol) |
+| **mesh-mcp-bridge** | Python | `pip install mesh-mcp-bridge` | [PyPI](https://pypi.org/project/mesh-mcp-bridge/) |
+| **openapi-bridge** | Python | `pip install httpx pyyaml` | [README](https://github.com/mellowmarshall/mars-protocol/tree/master/bridges/openapi) |
+
 ---
 
 ## What Agents Publish
@@ -224,7 +246,7 @@ Descriptor {
     schema_hash:  blake3(core/capability)
     topic:        "compute/inference/text-generation"
     routing_keys: [blake3("compute"), blake3("compute/inference"), blake3("compute/inference/text-generation")]
-    payload:      CBOR { endpoint: "https://...", model: "llama-3.3-70b", max_tokens: 4096 }
+    payload:      { endpoint: "https://...", model: "llama-3.3-70b", max_tokens: 4096 }
     signature:    Ed25519(publisher, canonical_cbor(descriptor))
     ttl:          3600
     sequence:     1          # monotonic — newer replaces older
@@ -237,30 +259,21 @@ Routing keys are **hierarchical** — searching for `compute/inference` finds al
 
 ## Running a Hub
 
-A hub is a high-capacity mesh node for production deployments:
-
 ```bash
 # Generate hub identity
-./target/release/mesh-hub --generate-keypair
+./mesh-hub --generate-keypair
 
 # Edit config (see examples/hub.toml)
 cp examples/hub.toml mesh-hub.toml
 $EDITOR mesh-hub.toml
 
 # Run
-./target/release/mesh-hub --config mesh-hub.toml
+./mesh-hub --config mesh-hub.toml
 ```
 
-Hub features:
-- **Disk-backed storage** (redb) with LRU hot cache
-- **Multi-tenant** — per-org quotas, MU metering, DID-Auth challenge-response
-- **Admin API** — tenant management, metrics, health checks
-- **Hub peering** — federate with other hubs via gossip
-- **Prometheus metrics** — aggregate-only (no tenant data leakage)
-- **Rate limiting** — per-IP and per-identity sliding window
-- **SSRF protection** — blocks outbound connections to private address ranges
+Hub features: disk-backed storage (redb), multi-tenant with MU metering, admin API, hub-to-hub peering via gossip, Prometheus metrics, rate limiting, SSRF protection.
 
-See the [Operator Guide](docs/operator-guide.md) for full configuration reference.
+See the [Operator Guide](https://github.com/mellowmarshall/mars-protocol/blob/master/docs/operator-guide.md) for full configuration reference. Multi-region deployment scripts in [`deploy/`](https://github.com/mellowmarshall/mars-protocol/tree/master/deploy).
 
 ---
 
@@ -271,7 +284,7 @@ See the [Operator Guide](docs/operator-guide.md) for full configuration referenc
 <td>
 
 ### Hybrid Authentication
-- **Descriptors** carry Ed25519 publisher signatures — self-authenticating across relays, caches, and federation boundaries
+- **Descriptors** carry Ed25519 publisher signatures — self-authenticating across relays, caches, and federation
 - **Protocol messages** use mutual TLS with Ed25519 identity binding — zero per-message overhead
 
 ### Defense in Depth
@@ -288,7 +301,7 @@ See the [Operator Guide](docs/operator-guide.md) for full configuration referenc
 - **Identity**: Ed25519 keypairs, DID-based identifiers
 - **Hashing**: BLAKE3 with algorithm agility (version byte)
 - **Transport**: QUIC with mutual TLS, mandatory client auth
-- **Serialization**: RFC 8949 deterministic CBOR for content hashing
+- **Serialization**: RFC 8949 deterministic CBOR
 - **Descriptors**: Self-signed, sequence-monotonic, TTL-bounded
 
 </td>
@@ -304,19 +317,19 @@ See the [Operator Guide](docs/operator-guide.md) for full configuration referenc
 <td width="33%" valign="top">
 
 ### Agent-to-Agent Discovery
-An [OpenClaw](https://github.com/openclaw) agent needs code review. It queries the mesh for `compute/analysis/code-review`, gets back signed descriptors from agents that offer that capability, verifies their identity, and invokes the one with the best fit.
+An AI agent needs code review. It queries the mesh for `compute/analysis/code-review`, gets back signed descriptors, verifies identity, and invokes the best match.
+
+</td>
+<td width="33%" valign="top">
+
+### Distributed GPU Inference
+GPU owners share their hardware on the mesh. Agents discover the cheapest/fastest provider for their workload — no marketplace middleman.
 
 </td>
 <td width="33%" valign="top">
 
 ### Federated Tool Registry
-Instead of manually configuring MCP servers in every agent, publish tool capabilities to the mesh. Agents discover tools dynamically — no config files, no central registry, no single point of failure.
-
-</td>
-<td width="33%" valign="top">
-
-### IoT + Edge Compute
-Sensors publish `data/sensor/temperature` descriptors. Edge compute nodes publish `compute/analysis/anomaly-detection`. The mesh connects producers to consumers without a cloud broker.
+Publish MCP server tools to the mesh. Agents discover tools dynamically — no config files, no central registry, no single point of failure.
 
 </td>
 </tr>
@@ -324,55 +337,15 @@ Sensors publish `data/sensor/temperature` descriptors. Edge compute nodes publis
 
 ---
 
-## Examples
-
-| Example | Description |
-|---------|-------------|
-| [`examples/hub.toml`](examples/hub.toml) | Production hub configuration with all options documented |
-| [`examples/agent-publish.sh`](examples/agent-publish.sh) | AI agent publishing capabilities (inference, code review, search) |
-| [`examples/agent-discover.sh`](examples/agent-discover.sh) | AI agent discovering capabilities with hierarchical routing |
-| [`examples/node-relay.sh`](examples/node-relay.sh) | Relay node setup to strengthen the mesh |
-
----
-
-## Project Status
-
-mars-protocol is **feature-complete for v0.1** and ready for deployment.
-
-| Component | Status |
-|-----------|--------|
-| Wire protocol (PROTOCOL.md) | Stable draft |
-| Core types + CBOR + identity | Complete |
-| QUIC transport + mutual TLS | Complete |
-| Kademlia DHT | Complete |
-| mesh-node CLI | Complete |
-| mesh-client library | Complete |
-| mesh-hub (production) | Complete |
-| Multi-tenant + metering | Complete |
-| Hub peering + gossip | Complete |
-| Observability + metrics | Complete |
-| Security hardening | Complete (15 integration tests) |
-| Documentation | Complete |
-
-**Deferred:** Voucher system (prepaid credits), holder-DID binding (Security #9).
-
----
-
 ## Contributing
 
 ```bash
-# Run the full test suite
-cargo test --workspace
-
-# Run just the hub hardening tests
-cargo test --package mesh-hub
-
-# Check the wire spec
-cat PROTOCOL.md
+cargo test --workspace    # Run the full test suite (230+ tests)
+cargo test --package mesh-hub   # Hub hardening tests only
 ```
 
 ---
 
 ## License
 
-Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.
+Dual-licensed under [MIT](https://github.com/mellowmarshall/mars-protocol/blob/master/LICENSE-MIT) or [Apache-2.0](https://github.com/mellowmarshall/mars-protocol/blob/master/LICENSE-APACHE) at your option.
