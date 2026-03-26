@@ -4,14 +4,15 @@ Turn your gaming PC into a passive income machine. Share your GPU on the MARS me
 
 ## How Much Can You Earn?
 
-| GPU | Models | Est. Earnings (24/7) |
-|-----|--------|---------------------|
-| RTX 4090 | Llama 3.3 70B (Q4) | $5-15/day |
-| RTX 3090 | Mistral 7B, Llama 8B | $2-8/day |
-| RTX 4070 | Mistral 7B, Phi-3 | $1-5/day |
-| RTX 3060 12GB | Llama 8B (Q4) | $0.50-3/day |
+| GPU | ~Throughput | Break-even | Suggested Price | Est. Earnings (24/7, 50% util) |
+|-----|-----------|-----------|----------------|-------------------------------|
+| RTX 4090 | 25 tok/s | $0.0009/1K | $0.0027/1K | $3-5/day |
+| RTX 3090 | 15 tok/s | $0.0011/1K | $0.0033/1K | $1.50-3/day |
+| RTX 4070 | 12 tok/s | $0.0007/1K | $0.0021/1K | $0.80-2/day |
+| A100 | 40 tok/s | $0.0056/1K | $0.0167/1K | $8-15/day |
+| H100 | 80 tok/s | $0.0069/1K | $0.0208/1K | $15-30/day |
 
-*Earnings depend on demand and your pricing. Early providers get the most traffic as the network grows.*
+*Earnings depend on demand, utilization, and model. Prices calculated from throughput benchmarks and electricity/rental costs. Early providers get the most traffic.*
 
 ## Quick Start (5 minutes)
 
@@ -64,11 +65,19 @@ curl http://localhost:3000/v1/provider/status
 
 ## Pricing Guide
 
-- **$0.10-0.20/1K tokens** — competitive with cloud providers
-- **$0.05/1K tokens** — undercutting the market, high volume
+The provider agent calculates pricing based on your GPU's actual throughput and electricity costs:
+
+- **Break-even** — your real cost per 1K tokens (electricity/rental only)
+- **2-3x break-even** — competitive, good volume
+- **5x break-even** — premium, lower volume but higher margin
 - **$0.00** — free tier to build reputation (recommended for first week)
 
-Start free to build reputation and get reviews, then set your price.
+For reference, cloud API pricing:
+- OpenAI GPT-4o: $0.005/1K tokens
+- Together AI Llama 70B: $0.0009/1K tokens
+- Groq Llama 70B: $0.0006/1K tokens
+
+Your break-even on a consumer GPU is typically $0.0007-0.0015/1K tokens — well below cloud APIs. Even at 3x margin you're undercutting everyone.
 
 ## Requirements
 

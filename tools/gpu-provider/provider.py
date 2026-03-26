@@ -33,17 +33,22 @@ log = logging.getLogger("mars-gpu-provider")
 
 CONFIG_FILE = Path("mars-provider.json")
 
-# Suggested pricing by GPU tier
-GPU_PRICING = {
-    "4090": (0.12, 0.20),
-    "4080": (0.10, 0.18),
-    "3090": (0.08, 0.15),
-    "4070": (0.06, 0.12),
-    "3080": (0.06, 0.12),
-    "3060": (0.04, 0.08),
-    "a100": (0.20, 0.40),
-    "h100": (0.30, 0.60),
-    "l40": (0.15, 0.30),
+# GPU throughput benchmarks (tokens/sec for Llama 70B or equivalent)
+# and typical rental/electricity cost per hour.
+# Used to calculate realistic pricing suggestions.
+GPU_BENCHMARKS: dict[str, dict[str, float]] = {
+    # Consumer GPUs (electricity only: TDP * $/kWh, assume $0.15/kWh)
+    "4090":  {"tok_per_sec": 25, "cost_per_hr": 0.08},   # 350W TDP
+    "4080":  {"tok_per_sec": 18, "cost_per_hr": 0.05},   # 320W
+    "3090":  {"tok_per_sec": 15, "cost_per_hr": 0.06},   # 350W
+    "4070":  {"tok_per_sec": 12, "cost_per_hr": 0.03},   # 200W
+    "3080":  {"tok_per_sec": 12, "cost_per_hr": 0.05},   # 320W
+    "3060":  {"tok_per_sec": 6,  "cost_per_hr": 0.03},   # 170W
+    # Data center GPUs (typical rental rates)
+    "a100":  {"tok_per_sec": 40, "cost_per_hr": 0.80},
+    "h100":  {"tok_per_sec": 80, "cost_per_hr": 2.00},
+    "l40":   {"tok_per_sec": 30, "cost_per_hr": 0.60},
+    "a10g":  {"tok_per_sec": 15, "cost_per_hr": 0.40},
 }
 
 # ── Hardware Detection ────────────────────────────────────────────────
@@ -132,13 +137,33 @@ def detect_region() -> str:
         return "unknown"
 
 
-def suggest_price(gpu_name: str) -> tuple[float, float] | None:
-    """Suggest a price range based on GPU model."""
+def suggest_price(gpu_name: str) -> dict[str, float] | None:
+    """Calculate a realistic price range based on GPU throughput and costs.
+
+    Returns cost_per_1k (break-even), suggested_min, suggested_max.
+    Pricing is based on: (cost_per_hour / tokens_per_hour) * 1000 + margin.
+    """
     name_lower = gpu_name.lower()
-    for key, price_range in GPU_PRICING.items():
+    bench = None
+    for key, data in GPU_BENCHMARKS.items():
         if key in name_lower:
-            return price_range
-    return None
+            bench = data
+            break
+
+    if not bench:
+        return None
+
+    tokens_per_hr = bench["tok_per_sec"] * 3600
+    cost_per_1k = (bench["cost_per_hr"] / tokens_per_hr) * 1000
+
+    return {
+        "breakeven": round(cost_per_1k, 6),
+        "min": round(cost_per_1k * 2, 6),      # 2x margin (floor)
+        "max": round(cost_per_1k * 5, 6),      # 5x margin (ceiling)
+        "suggested": round(cost_per_1k * 3, 6), # 3x margin (default)
+        "tok_per_sec": bench["tok_per_sec"],
+        "cost_per_hr": bench["cost_per_hr"],
+    }
 
 
 # ── Ngrok Tunnel ──────────────────────────────────────────────────────
@@ -226,15 +251,22 @@ def interactive_setup(
     stripe_account = ""
     if monetize:
         print()
-        suggested = suggest_price(gpu["gpu_name"])
-        if suggested:
-            print(f"  Suggested rate for {gpu['gpu_name']}: ${suggested[0]:.2f}-${suggested[1]:.2f}/1K tokens")
-            print(f"  For comparison: AWS ≈ $0.80, Lambda Labs ≈ $0.25/1K tokens")
-            default_price = round((suggested[0] + suggested[1]) / 2, 2)
+        pricing = suggest_price(gpu["gpu_name"])
+        if pricing:
+            print(f"  Estimated throughput: ~{pricing['tok_per_sec']:.0f} tokens/sec")
+            print(f"  Your electricity cost: ~${pricing['cost_per_hr']:.2f}/hr")
+            print(f"  Break-even price: ${pricing['breakeven']:.4f}/1K tokens")
+            print(f"  Suggested range:  ${pricing['min']:.4f} - ${pricing['max']:.4f}/1K tokens")
+            print()
+            print(f"  For comparison:")
+            print(f"    OpenAI GPT-4o:       $0.0050/1K tokens")
+            print(f"    Together AI Llama:   $0.0009/1K tokens")
+            print(f"    Your break-even:     ${pricing['breakeven']:.4f}/1K tokens")
+            default_price = pricing["suggested"]
         else:
-            print("  Typical rates: $0.05-0.20/1K tokens")
-            print("  Tip: start low to build reputation, raise later")
-            default_price = 0.10
+            print("  Could not auto-detect pricing for your GPU.")
+            print("  Typical range: $0.001-0.010/1K tokens")
+            default_price = 0.003
         price = prompt_float("Price per 1K tokens (USD)", default_price)
         print()
 
