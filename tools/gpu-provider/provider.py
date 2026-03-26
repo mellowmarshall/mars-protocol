@@ -3,17 +3,11 @@
 MARS GPU Provider Agent
 
 Turns any machine with a GPU + Ollama into a mesh inference provider.
-Auto-detects hardware, publishes capabilities, proxies requests.
+Interactive setup on first run. Auto-detects everything.
 
 Usage:
-    # Basic — auto-detect everything
-    python provider.py --gateway http://localhost:3000
-
-    # Specify what to advertise
-    python provider.py --gateway http://localhost:3000 --price 0.10 --models llama3.3,mistral
-
-    # With a public endpoint (if you have port forwarding / ngrok)
-    python provider.py --gateway http://localhost:3000 --endpoint https://my-gpu.ngrok.io
+    python provider.py                    # Interactive setup
+    python provider.py --config mars.json # Use saved config (headless)
 
 Prerequisites:
     pip install httpx
@@ -23,16 +17,34 @@ Prerequisites:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import subprocess
 import sys
 import time
+import webbrowser
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("mars-gpu-provider")
+
+CONFIG_FILE = Path("mars-provider.json")
+
+# Suggested pricing by GPU tier
+GPU_PRICING = {
+    "4090": (0.12, 0.20),
+    "4080": (0.10, 0.18),
+    "3090": (0.08, 0.15),
+    "4070": (0.06, 0.12),
+    "3080": (0.06, 0.12),
+    "3060": (0.04, 0.08),
+    "a100": (0.20, 0.40),
+    "h100": (0.30, 0.60),
+    "l40": (0.15, 0.30),
+}
 
 # ── Hardware Detection ────────────────────────────────────────────────
 
@@ -57,7 +69,6 @@ def detect_gpu() -> dict[str, Any]:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
 
-    # Try AMD ROCm
     try:
         result = subprocess.run(
             ["rocm-smi", "--showproductname", "--csv"],
@@ -91,28 +102,60 @@ def detect_ollama_models(ollama_url: str = "http://localhost:11434") -> list[dic
         return []
 
 
+def detect_region() -> str:
+    """Attempt to auto-detect region from IP geolocation."""
+    try:
+        r = httpx.get("https://ipapi.co/json/", timeout=5)
+        data = r.json()
+        country = data.get("country_code", "")
+        region = data.get("region", "")
+        city = data.get("city", "")
+        if country == "US":
+            # Map US regions
+            eastern = {"VA", "NY", "NJ", "PA", "MD", "DC", "NC", "SC", "GA", "FL", "MA", "CT"}
+            state = data.get("region_code", "")
+            if state in eastern:
+                return "us-east"
+            return "us-west"
+        elif country in ("DE", "FR", "NL", "BE", "AT", "CH", "PL", "CZ"):
+            return "eu-central"
+        elif country in ("GB", "IE", "SE", "NO", "DK", "FI"):
+            return "eu-west"
+        elif country in ("SG", "MY", "TH", "VN", "PH", "ID"):
+            return "ap-southeast"
+        elif country in ("JP", "KR", "TW"):
+            return "ap-northeast"
+        elif country in ("AU", "NZ"):
+            return "ap-south"
+        return f"{city}, {region}" if city else country.lower()
+    except Exception:
+        return "unknown"
+
+
+def suggest_price(gpu_name: str) -> tuple[float, float] | None:
+    """Suggest a price range based on GPU model."""
+    name_lower = gpu_name.lower()
+    for key, price_range in GPU_PRICING.items():
+        if key in name_lower:
+            return price_range
+    return None
+
+
 # ── Ngrok Tunnel ──────────────────────────────────────────────────────
 
 
 def start_ngrok(port: int = 11434) -> str | None:
-    """Start an ngrok tunnel to the given port and return the public URL.
-
-    Returns None if ngrok isn't installed or fails to start.
-    """
+    """Start an ngrok tunnel and return the public URL."""
     try:
         subprocess.run(["ngrok", "version"], capture_output=True, timeout=5, check=True)
     except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
         return None
 
-    log.info("Starting ngrok tunnel to port %d...", port)
-
-    # Start ngrok in background
     _proc = subprocess.Popen(
         ["ngrok", "http", str(port), "--log=stdout", "--log-format=json"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
-    # Wait for tunnel to establish, then query the local API
     for _ in range(15):
         time.sleep(1)
         try:
@@ -121,30 +164,170 @@ def start_ngrok(port: int = 11434) -> str | None:
             for t in tunnels:
                 public_url = t.get("public_url", "")
                 if public_url.startswith("https://"):
-                    log.info("Ngrok tunnel established: %s", public_url)
                     return public_url
         except Exception:
             continue
-
-    log.warning("Ngrok started but no tunnel URL found")
     return None
 
 
-# ── Descriptor Publishing ─────────────────────────────────────────────
+# ── Interactive Setup ─────────────────────────────────────────────────
+
+
+def prompt_yn(question: str, default: bool = True) -> bool:
+    """Prompt yes/no with a default."""
+    hint = "[Y/n]" if default else "[y/N]"
+    answer = input(f"  {question} {hint}: ").strip().lower()
+    if not answer:
+        return default
+    return answer in ("y", "yes")
+
+
+def prompt_str(question: str, default: str = "") -> str:
+    """Prompt for a string with optional default."""
+    if default:
+        answer = input(f"  {question} [{default}]: ").strip()
+        return answer if answer else default
+    return input(f"  {question}: ").strip()
+
+
+def prompt_float(question: str, default: float) -> float:
+    """Prompt for a float with default."""
+    answer = input(f"  {question} [{default}]: ").strip()
+    if not answer:
+        return default
+    try:
+        return float(answer)
+    except ValueError:
+        print(f"  Invalid number, using default: {default}")
+        return default
+
+
+def interactive_setup(
+    gpu: dict[str, Any],
+    models: list[dict[str, Any]],
+    ollama_url: str,
+) -> dict[str, Any]:
+    """Walk the user through first-time setup. Returns a config dict."""
+    print()
+    print("  ╔══════════════════════════════════════════════════════╗")
+    print("  ║         MARS GPU Provider — First Time Setup        ║")
+    print("  ╚══════════════════════════════════════════════════════╝")
+    print()
+    print(f"  Detected: {gpu['gpu_name']} ({gpu['vram_mb']} MB VRAM)")
+    print(f"  Ollama:   {len(models)} model(s) installed")
+    for m in models:
+        print(f"    - {m['name']} ({m['size_gb']}GB, {m['parameter_size'] or '?'} params)")
+    print()
+
+    # ── Monetization ──
+    monetize = prompt_yn("Would you like to earn money for inference requests?")
+
+    price = 0.0
+    stripe_account = ""
+    if monetize:
+        print()
+        suggested = suggest_price(gpu["gpu_name"])
+        if suggested:
+            print(f"  Suggested rate for {gpu['gpu_name']}: ${suggested[0]:.2f}-${suggested[1]:.2f}/1K tokens")
+            print(f"  For comparison: AWS ≈ $0.80, Lambda Labs ≈ $0.25/1K tokens")
+            default_price = round((suggested[0] + suggested[1]) / 2, 2)
+        else:
+            print("  Typical rates: $0.05-0.20/1K tokens")
+            print("  Tip: start low to build reputation, raise later")
+            default_price = 0.10
+        price = prompt_float("Price per 1K tokens (USD)", default_price)
+        print()
+
+        # Stripe
+        print("  To receive payments, you need a Stripe account.")
+        print("  This takes about 2 minutes — just name, email, and bank info.")
+        has_stripe = prompt_yn("Do you already have a Stripe Connect account?", default=False)
+
+        if has_stripe:
+            stripe_account = prompt_str("Stripe account ID (acct_xxx)")
+        else:
+            print()
+            print("  We'll open Stripe Connect onboarding in your browser.")
+            print("  After completing setup, paste your account ID here.")
+            print()
+            print("  → Go to: https://connect.stripe.com/express")
+            print()
+            try:
+                webbrowser.open("https://connect.stripe.com/express")
+            except Exception:
+                pass
+            stripe_account = prompt_str("Paste your Stripe account ID after onboarding (acct_xxx)")
+
+        if price > 0 and not stripe_account:
+            print()
+            print("  ⚠ No Stripe account — running in free mode.")
+            print("    Add --stripe-account later to start earning.")
+            price = 0.0
+
+    # ── Region ──
+    print()
+    print("  Detecting your region...")
+    auto_region = detect_region()
+    print(f"  Auto-detected: {auto_region}")
+    use_auto = prompt_yn(f"Use '{auto_region}'?")
+    region = auto_region if use_auto else prompt_str("Enter region (e.g. us-east, eu-central)")
+
+    # ── Models ──
+    print()
+    if len(models) > 1:
+        print("  Which models would you like to share?")
+        selected = []
+        for m in models:
+            share = prompt_yn(f"{m['name']} ({m['size_gb']}GB)")
+            if share:
+                selected.append(m["name"])
+        if not selected:
+            print("  No models selected — sharing all.")
+            selected = [m["name"] for m in models]
+    else:
+        selected = [m["name"] for m in models]
+
+    # ── Gateway ──
+    print()
+    gateway = prompt_str("Mesh gateway URL", "http://localhost:3000")
+
+    # ── Build config ──
+    config = {
+        "gateway": gateway,
+        "ollama_url": ollama_url,
+        "price_per_1k_tokens": price,
+        "stripe_account": stripe_account,
+        "region": region,
+        "models": selected,
+        "refresh_secs": 1800,
+    }
+
+    # Save config
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    print()
+    print(f"  ✓ Config saved to {CONFIG_FILE}")
+    print(f"    Next time, run: python provider.py --config {CONFIG_FILE}")
+    print()
+
+    return config
+
+
+# ── Descriptor Building ───────────────────────────────────────────────
 
 
 def build_descriptors(
     gpu: dict[str, Any],
     models: list[dict[str, Any]],
     endpoint: str,
-    price_per_1k_tokens: float,
-    region: str,
+    config: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    """Build mesh descriptors for each model on this GPU."""
+    """Build mesh descriptors from config."""
     descriptors = []
+    price = config.get("price_per_1k_tokens", 0.0)
+    region = config.get("region", "unknown")
+    stripe = config.get("stripe_account", "")
 
     for model in models:
-        # Determine capability type from model family
         if "embed" in model["name"].lower():
             cap_type = "compute/inference/embeddings"
         elif "vision" in model["name"].lower() or "llava" in model["name"].lower():
@@ -154,38 +337,39 @@ def build_descriptors(
         else:
             cap_type = "compute/inference/text-generation"
 
-        descriptors.append({
-            "type": cap_type,
-            "endpoint": endpoint,
-            "params": {
-                "name": f"{model['name']} ({gpu['gpu_name']})",
-                "provider": "mars-gpu-provider",
-                "model": model["name"],
-                "parameter_size": model.get("parameter_size", ""),
-                "quantization": model.get("quantization", ""),
-                "gpu": gpu["gpu_name"],
-                "vram_mb": gpu["vram_mb"],
-                "price_per_1k_tokens": price_per_1k_tokens,
-                "currency": "USD",
-                "region": region,
-                "stripe_account": "",  # Set by caller if paid
-                "accepts_payment": price_per_1k_tokens > 0,
-                "ollama_api": f"{endpoint}/api/generate",
-                "openai_compat": f"{endpoint}/v1/chat/completions",
-            },
-        })
+        params: dict[str, Any] = {
+            "name": f"{model['name']} ({gpu['gpu_name']})",
+            "provider": "mars-gpu-provider",
+            "model": model["name"],
+            "parameter_size": model.get("parameter_size", ""),
+            "quantization": model.get("quantization", ""),
+            "gpu": gpu["gpu_name"],
+            "vram_mb": gpu["vram_mb"],
+            "region": region,
+            "ollama_api": f"{endpoint}/api/generate",
+            "openai_compat": f"{endpoint}/v1/chat/completions",
+        }
+
+        if price > 0:
+            params["price_per_1k_tokens"] = price
+            params["currency"] = "USD"
+            params["accepts_payment"] = True
+            if stripe:
+                params["stripe_account"] = stripe
+                params["payment_methods"] = ["stripe"]
+        else:
+            params["price_per_1k_tokens"] = 0.0
+            params["accepts_payment"] = False
+
+        descriptors.append({"type": cap_type, "endpoint": endpoint, "params": params})
 
     return descriptors
 
 
-def publish_descriptors(
-    gateway_url: str,
-    descriptors: list[dict[str, Any]],
-) -> list[str]:
-    """Publish all descriptors to the mesh and return their IDs."""
+def publish_descriptors(gateway_url: str, descriptors: list[dict[str, Any]]) -> list[str]:
+    """Publish descriptors to the mesh."""
     client = httpx.Client(base_url=gateway_url, timeout=30)
     ids = []
-
     for i, desc in enumerate(descriptors):
         try:
             r = client.post("/v1/publish", json=desc)
@@ -196,117 +380,104 @@ def publish_descriptors(
         except Exception as e:
             log.error("Failed to publish %s: %s", desc["params"]["name"], e)
         if i < len(descriptors) - 1:
-            time.sleep(7)  # Rate limit: 10/min per publisher
-
+            time.sleep(7)
     client.close()
     return ids
 
 
-# ── Main Loop ─────────────────────────────────────────────────────────
+# ── Main ──────────────────────────────────────────────────────────────
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="MARS GPU Provider Agent")
-    parser.add_argument("--gateway", required=True, help="Mesh gateway URL")
-    parser.add_argument("--ollama", default="http://localhost:11434", help="Ollama API URL")
+    parser.add_argument("--config", type=Path, default=None,
+                        help="Path to saved config (skip interactive setup)")
+    parser.add_argument("--ollama", default="http://localhost:11434",
+                        help="Ollama API URL (default: http://localhost:11434)")
     parser.add_argument("--endpoint", default=None,
-                        help="Public endpoint for this provider (default: auto-detect via ngrok)")
+                        help="Override public endpoint (skip ngrok)")
     parser.add_argument("--no-ngrok", action="store_true",
-                        help="Don't auto-start ngrok tunnel (use --endpoint or localhost)")
-    parser.add_argument("--price", type=float, default=0.0,
-                        help="Price per 1K tokens in USD (0 = free)")
-    parser.add_argument("--region", default="unknown", help="Provider region (e.g. us-east)")
-    parser.add_argument("--models", default=None,
-                        help="Comma-separated model names to advertise (default: all installed)")
-    parser.add_argument("--stripe-account", default=None,
-                        help="Stripe Connect account ID for payments (e.g. acct_xxx)")
-    parser.add_argument("--refresh", type=int, default=1800,
-                        help="Seconds between re-publish cycles (default: 1800)")
+                        help="Don't auto-start ngrok")
     args = parser.parse_args()
 
-    # Determine public endpoint
+    # Detect hardware
+    gpu = detect_gpu()
+    models = detect_ollama_models(args.ollama)
+
+    if not models:
+        print()
+        print("  No Ollama models found. Is Ollama running?")
+        print()
+        print("  Install Ollama:  curl -fsSL https://ollama.com/install.sh | sh")
+        print("  Start Ollama:    ollama serve")
+        print("  Pull a model:    ollama pull llama3.3")
+        print()
+        sys.exit(1)
+
+    # Load or create config
+    config_path = args.config or CONFIG_FILE
+    if config_path.exists():
+        config = json.loads(config_path.read_text())
+        print(f"\n  Loaded config from {config_path}")
+    else:
+        config = interactive_setup(gpu, models, args.ollama)
+
+    # Filter to selected models
+    selected_names = set(config.get("models", [m["name"] for m in models]))
+    selected_models = [m for m in models if m["name"] in selected_names]
+    if not selected_models:
+        selected_models = models
+
+    # Determine endpoint
     if args.endpoint:
         endpoint = args.endpoint
     elif not args.no_ngrok:
-        # Auto-start ngrok tunnel for zero-config public access
+        print("  Starting ngrok tunnel...")
         ollama_port = int(args.ollama.rsplit(":", 1)[-1])
         ngrok_url = start_ngrok(ollama_port)
         if ngrok_url:
             endpoint = ngrok_url
+            print(f"  ✓ Public endpoint: {endpoint}")
         else:
-            log.warning("Ngrok not available — using localhost (only reachable locally)")
-            log.warning("Install ngrok: https://ngrok.com/download or use --endpoint")
+            print("  ⚠ Ngrok not available — using localhost (only reachable locally)")
+            print("    Install ngrok: https://ngrok.com/download")
             endpoint = args.ollama
     else:
         endpoint = args.ollama
 
-    # Detect hardware
-    log.info("Detecting hardware...")
-    gpu = detect_gpu()
-    log.info("GPU: %s (%d MB VRAM)", gpu["gpu_name"], gpu["vram_mb"])
+    # Build and publish
+    descriptors = build_descriptors(gpu, selected_models, endpoint, config)
+    gateway = config.get("gateway", "http://localhost:3000")
+    refresh = config.get("refresh_secs", 1800)
+    price = config.get("price_per_1k_tokens", 0.0)
 
-    # Detect models
-    log.info("Querying Ollama at %s...", args.ollama)
-    all_models = detect_ollama_models(args.ollama)
-
-    if not all_models:
-        log.error("No models found. Is Ollama running? (ollama serve)")
-        sys.exit(1)
-
-    # Filter models if specified
-    if args.models:
-        wanted = set(args.models.split(","))
-        models = [m for m in all_models if m["name"] in wanted]
-        if not models:
-            log.error("None of the specified models are installed: %s", args.models)
-            log.info("Available models: %s", ", ".join(m["name"] for m in all_models))
-            sys.exit(1)
-    else:
-        models = all_models
-
-    log.info("Models to advertise: %s", ", ".join(m["name"] for m in models))
-
-    # Validate pricing + stripe
-    if args.price > 0 and not args.stripe_account:
-        log.warning("Price set to $%.2f/1K tokens but no --stripe-account provided", args.price)
-        log.warning("Providers without Stripe cannot receive payments. Add --stripe-account acct_xxx")
-        log.warning("Or set --price 0 to provide for free")
-
-    # Build descriptors
-    descriptors = build_descriptors(gpu, models, endpoint, args.price, args.region)
-
-    # Inject Stripe account if provided
-    if args.stripe_account:
-        for d in descriptors:
-            d["params"]["stripe_account"] = args.stripe_account
-
-    # Publish loop
-    log.info("Publishing %d capabilities to %s...", len(descriptors), args.gateway)
+    print()
+    print("  ╔══════════════════════════════════════════════════════╗")
+    print("  ║           MARS GPU Provider — Starting              ║")
+    print("  ╚══════════════════════════════════════════════════════╝")
+    print()
+    print(f"  GPU:      {gpu['gpu_name']} ({gpu['vram_mb']} MB VRAM)")
+    print(f"  Models:   {len(selected_models)}")
+    print(f"  Endpoint: {endpoint}")
+    print(f"  Price:    {'FREE' if price == 0 else f'${price}/1K tokens'}")
+    print(f"  Region:   {config.get('region', 'unknown')}")
+    if config.get("stripe_account"):
+        print(f"  Stripe:   {config['stripe_account']}")
+    print(f"  Gateway:  {gateway}")
+    print(f"  Refresh:  every {refresh}s")
+    print()
+    for desc in descriptors:
+        p = desc["params"]
+        print(f"  {desc['type']:45s} {p['model']}")
+    print()
 
     while True:
-        ids = publish_descriptors(args.gateway, descriptors)
-        log.info("Published %d/%d descriptors. Next refresh in %ds.",
-                 len(ids), len(descriptors), args.refresh)
-
-        print("\n" + "=" * 60)
-        print("  MARS GPU Provider — Online")
-        print("=" * 60)
-        print(f"  GPU:      {gpu['gpu_name']} ({gpu['vram_mb']} MB)")
-        print(f"  Models:   {len(models)}")
-        print(f"  Endpoint: {endpoint}")
-        print(f"  Price:    {'FREE' if args.price == 0 else f'${args.price}/1K tokens'}")
-        print(f"  Region:   {args.region}")
-        print(f"  Refresh:  every {args.refresh}s")
-        print()
-        for desc in descriptors:
-            p = desc["params"]
-            print(f"  {desc['type']:45s} {p['model']}")
-        print()
-
+        ids = publish_descriptors(gateway, descriptors)
+        log.info("Published %d/%d. Next refresh in %ds.", len(ids), len(descriptors), refresh)
         try:
-            time.sleep(args.refresh)
+            time.sleep(refresh)
         except KeyboardInterrupt:
-            log.info("Shutting down")
+            print("\n  Shutting down. Your GPU is no longer on the mesh.")
             break
 
 
