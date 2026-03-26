@@ -58,6 +58,8 @@ struct PublishRequest {
     endpoint: String,
     #[serde(default)]
     params: Option<serde_json::Value>,
+    #[serde(default)]
+    ttl: Option<u32>,
 }
 
 #[derive(Serialize)]
@@ -159,6 +161,7 @@ async fn publish(
 
     let routing_keys = hierarchical_routing_keys(&req.r#type);
     let now = now_micros();
+    let ttl = req.ttl.unwrap_or(3600).clamp(60, 86400);
 
     let descriptor = Descriptor::create(
         &state.keypair,
@@ -167,7 +170,7 @@ async fn publish(
         payload,
         now,
         1,
-        3600,
+        ttl,
         routing_keys,
     )
     .map_err(|e| {

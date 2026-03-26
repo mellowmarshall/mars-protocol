@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import asyncio
+import logging
+import threading
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 import httpx
@@ -79,6 +82,72 @@ def _parse_descriptor(data: dict[str, Any]) -> Descriptor:
         ttl=data["ttl"],
         sequence=data["sequence"],
     )
+
+
+# ── Maintained descriptors ─────────────────────────────────────────────
+
+_log = logging.getLogger("mesh_protocol.maintained")
+
+
+@dataclass
+class MaintainedDescriptor:
+    """A published descriptor that is automatically refreshed in the background."""
+
+    descriptor_id: str
+    capability_type: str
+    endpoint: str
+
+    _thread: threading.Thread = field(repr=False, default=None)  # type: ignore[assignment]
+    _stop_event: threading.Event = field(repr=False, default=None)  # type: ignore[assignment]
+    _last_error: Optional[str] = field(repr=False, default=None)
+
+    def stop(self) -> None:
+        """Signal the refresh thread to stop and wait for it to exit."""
+        if self._stop_event is not None:
+            self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+
+    def is_alive(self) -> bool:
+        """Return True if the background refresh thread is still running."""
+        return self._thread is not None and self._thread.is_alive()
+
+    def __enter__(self) -> MaintainedDescriptor:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.stop()
+
+
+@dataclass
+class AsyncMaintainedDescriptor:
+    """A published descriptor that is automatically refreshed via an async task."""
+
+    descriptor_id: str
+    capability_type: str
+    endpoint: str
+
+    _task: asyncio.Task[None] = field(repr=False, default=None)  # type: ignore[assignment]
+    _last_error: Optional[str] = field(repr=False, default=None)
+
+    async def stop(self) -> None:
+        """Cancel the refresh task and wait for it to finish."""
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+
+    def is_alive(self) -> bool:
+        """Return True if the background refresh task is still running."""
+        return self._task is not None and not self._task.done()
+
+    async def __aenter__(self) -> AsyncMaintainedDescriptor:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.stop()
 
 
 # ── Synchronous client ──────────────────────────────────────────────────
@@ -169,6 +238,82 @@ class MeshClient:
             seed=data["seed"],
         )
 
+    def publish_maintained(
+        self,
+        capability_type: str,
+        endpoint: str,
+        params: Optional[dict[str, Any]] = None,
+        refresh_interval: float = 1800.0,
+        max_retries: int = 10,
+    ) -> MaintainedDescriptor:
+        """Publish a descriptor and keep it alive via a background daemon thread.
+
+        The descriptor is published immediately.  A background thread then
+        re-publishes at ``refresh_interval`` seconds to prevent expiry.
+
+        Args:
+            capability_type: Hierarchical type string.
+            endpoint: URL where the capability is served.
+            params: Optional metadata attached to the descriptor.
+            refresh_interval: Seconds between refresh publishes (default 30 min).
+            max_retries: After this many consecutive failures the thread logs an
+                error but keeps retrying — it never gives up.
+
+        Returns:
+            A :class:`MaintainedDescriptor` that can be stopped via ``stop()``
+            or used as a context manager.
+        """
+        result = self.publish(capability_type, endpoint, params)
+
+        stop_event = threading.Event()
+        maintained = MaintainedDescriptor(
+            descriptor_id=result.descriptor_id,
+            capability_type=capability_type,
+            endpoint=endpoint,
+            _stop_event=stop_event,
+        )
+
+        def _refresh_loop() -> None:
+            consecutive_failures = 0
+            while True:
+                stop_event.wait(timeout=refresh_interval)
+                if stop_event.is_set():
+                    _log.debug("Stop event set — exiting refresh loop for %s", maintained.descriptor_id)
+                    return
+                try:
+                    new_result = self.publish(capability_type, endpoint, params)
+                    maintained.descriptor_id = new_result.descriptor_id
+                    maintained._last_error = None
+                    consecutive_failures = 0
+                    _log.debug("Refreshed descriptor %s", maintained.descriptor_id)
+                except Exception as exc:
+                    consecutive_failures += 1
+                    maintained._last_error = str(exc)
+                    if consecutive_failures >= max_retries:
+                        _log.error(
+                            "Refresh failed %d consecutive times for %s: %s",
+                            consecutive_failures,
+                            maintained.descriptor_id,
+                            exc,
+                        )
+                    else:
+                        _log.warning(
+                            "Refresh attempt %d failed for %s: %s",
+                            consecutive_failures,
+                            maintained.descriptor_id,
+                            exc,
+                        )
+                    # Exponential backoff: 5, 10, 20, 40, ... capped at 300s
+                    backoff = min(5.0 * (2 ** (consecutive_failures - 1)), 300.0)
+                    stop_event.wait(timeout=backoff)
+                    if stop_event.is_set():
+                        return
+
+        thread = threading.Thread(target=_refresh_loop, daemon=True)
+        thread.start()
+        maintained._thread = thread
+        return maintained
+
     def close(self) -> None:
         """Close the underlying HTTP connection."""
         self._client.close()
@@ -240,6 +385,79 @@ class AsyncMeshClient:
             identity=data["identity"],
             seed=data["seed"],
         )
+
+    async def publish_maintained(
+        self,
+        capability_type: str,
+        endpoint: str,
+        params: Optional[dict[str, Any]] = None,
+        refresh_interval: float = 1800.0,
+        max_retries: int = 10,
+    ) -> AsyncMaintainedDescriptor:
+        """Publish a descriptor and keep it alive via a background async task.
+
+        The descriptor is published immediately.  A background task then
+        re-publishes at ``refresh_interval`` seconds to prevent expiry.
+
+        Args:
+            capability_type: Hierarchical type string.
+            endpoint: URL where the capability is served.
+            params: Optional metadata attached to the descriptor.
+            refresh_interval: Seconds between refresh publishes (default 30 min).
+            max_retries: After this many consecutive failures the task logs an
+                error but keeps retrying — it never gives up.
+
+        Returns:
+            An :class:`AsyncMaintainedDescriptor` that can be stopped via
+            ``await stop()`` or used as an async context manager.
+        """
+        result = await self.publish(capability_type, endpoint, params)
+
+        maintained = AsyncMaintainedDescriptor(
+            descriptor_id=result.descriptor_id,
+            capability_type=capability_type,
+            endpoint=endpoint,
+        )
+
+        async def _refresh_loop() -> None:
+            consecutive_failures = 0
+            while True:
+                await asyncio.sleep(refresh_interval)
+                try:
+                    new_result = await self.publish(capability_type, endpoint, params)
+                    maintained.descriptor_id = new_result.descriptor_id
+                    maintained._last_error = None
+                    consecutive_failures = 0
+                    _log.debug("Refreshed descriptor %s", maintained.descriptor_id)
+                except asyncio.CancelledError:
+                    _log.debug("Refresh task cancelled for %s", maintained.descriptor_id)
+                    raise
+                except Exception as exc:
+                    consecutive_failures += 1
+                    maintained._last_error = str(exc)
+                    if consecutive_failures >= max_retries:
+                        _log.error(
+                            "Refresh failed %d consecutive times for %s: %s",
+                            consecutive_failures,
+                            maintained.descriptor_id,
+                            exc,
+                        )
+                    else:
+                        _log.warning(
+                            "Refresh attempt %d failed for %s: %s",
+                            consecutive_failures,
+                            maintained.descriptor_id,
+                            exc,
+                        )
+                    # Exponential backoff: 5, 10, 20, 40, ... capped at 300s
+                    backoff = min(5.0 * (2 ** (consecutive_failures - 1)), 300.0)
+                    try:
+                        await asyncio.sleep(backoff)
+                    except asyncio.CancelledError:
+                        raise
+
+        maintained._task = asyncio.create_task(_refresh_loop())
+        return maintained
 
     async def close(self) -> None:
         """Close the underlying HTTP connection."""

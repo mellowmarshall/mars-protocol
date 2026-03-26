@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import time
 
 import click
 
@@ -40,7 +41,18 @@ def main(verbose: bool) -> None:
     default=None,
     help="Human-readable name for the MCP server. Defaults to the command.",
 )
-def publish(gateway: str, mcp_server: str, name: str | None) -> None:
+@click.option(
+    "--refresh",
+    is_flag=True,
+    help="Re-publish periodically to keep descriptors alive.",
+)
+@click.option(
+    "--refresh-interval",
+    default=1800,
+    show_default=True,
+    help="Seconds between re-publishes (requires --refresh).",
+)
+def publish(gateway: str, mcp_server: str, name: str | None, refresh: bool, refresh_interval: int) -> None:
     """Connect to an MCP server and publish its tools to the mesh."""
     server_name = name or mcp_server
 
@@ -50,6 +62,17 @@ def publish(gateway: str, mcp_server: str, name: str | None) -> None:
     click.echo(f"Published {len(ids)} tool(s) to the mesh:")
     for descriptor_id in ids:
         click.echo(f"  {descriptor_id}")
+
+    if refresh:
+        click.echo(f"Refreshing every {refresh_interval}s (Ctrl+C to stop)")
+        with MeshPublisher(gateway) as pub:
+            while True:
+                try:
+                    time.sleep(refresh_interval)
+                    ids = asyncio.run(pub.publish_mcp_server(mcp_server, server_name))
+                    click.echo(f"Re-published {len(ids)} tool(s)")
+                except KeyboardInterrupt:
+                    break
 
 
 @main.command()

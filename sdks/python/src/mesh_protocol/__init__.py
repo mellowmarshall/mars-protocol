@@ -1,9 +1,11 @@
 """Mesh Protocol Python SDK — publish and discover capabilities on the mesh network."""
 
 from .client import (
+    AsyncMaintainedDescriptor,
     AsyncMeshClient,
     Descriptor,
     HealthStatus,
+    MaintainedDescriptor,
     MeshClient,
     MeshError,
     PublishResult,
@@ -17,4 +19,6 @@ __all__ = [
     "PublishResult",
     "HealthStatus",
     "MeshError",
+    "MaintainedDescriptor",
+    "AsyncMaintainedDescriptor",
 ]

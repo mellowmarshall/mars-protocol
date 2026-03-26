@@ -8,6 +8,9 @@ Interactive setup on first run. Auto-detects everything.
 Usage:
     python provider.py                    # Interactive setup
     python provider.py --config mars.json # Use saved config (headless)
+    python provider.py --install          # Install as system service
+    python provider.py --uninstall        # Remove system service
+    python provider.py --status           # Check service status
 
 Prerequisites:
     pip install httpx
@@ -17,10 +20,14 @@ Prerequisites:
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import logging
+import os
+import signal
 import subprocess
 import sys
+import textwrap
 import time
 import webbrowser
 from pathlib import Path
@@ -32,6 +39,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("mars-gpu-provider")
 
 CONFIG_FILE = Path("mars-provider.json")
+PID_DIR = Path.home() / ".config" / "mars"
+PID_FILE = PID_DIR / "provider.pid"
+SERVICE_NAME = "mars-gpu-provider"
+LAUNCHD_LABEL = "dev.mars-protocol.gpu-provider"
 
 # GPU throughput benchmarks (tokens/sec for Llama 70B or equivalent)
 # and typical rental/electricity cost per hour.
@@ -418,6 +429,383 @@ def publish_descriptors(gateway_url: str, descriptors: list[dict[str, Any]]) -> 
     return ids
 
 
+# ── PID File Management ──────────────────────────────────────────────
+
+
+def write_pid_file() -> None:
+    """Write the current process PID to the PID file."""
+    PID_DIR.mkdir(parents=True, exist_ok=True)
+    PID_FILE.write_text(str(os.getpid()))
+
+
+def remove_pid_file() -> None:
+    """Remove the PID file if it exists."""
+    try:
+        PID_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def check_existing_instance() -> bool:
+    """Check if another provider instance is already running.
+
+    Returns True if a running instance was detected.
+    """
+    if not PID_FILE.exists():
+        return False
+    try:
+        pid = int(PID_FILE.read_text().strip())
+        # Send signal 0 to check if process exists (does not kill it)
+        os.kill(pid, 0)
+        return True
+    except (ValueError, OSError):
+        # PID file is stale — process is not running
+        remove_pid_file()
+        return False
+
+
+# ── Service Installation ─────────────────────────────────────────────
+
+
+def _resolve_config_path() -> Path:
+    """Find the config file, resolving to an absolute path."""
+    config_path = Path.cwd() / CONFIG_FILE
+    if config_path.exists():
+        return config_path.resolve()
+    # Check next to the script itself
+    script_dir = Path(__file__).resolve().parent
+    alt = script_dir / CONFIG_FILE
+    if alt.exists():
+        return alt.resolve()
+    return config_path.resolve()
+
+
+def _generate_systemd_unit(provider_script: Path, config_path: Path) -> str:
+    """Generate a systemd user service unit file."""
+    python = Path(sys.executable).resolve()
+    return textwrap.dedent(f"""\
+        [Unit]
+        Description=MARS GPU Provider Agent
+        After=network-online.target
+        Wants=network-online.target
+
+        [Service]
+        Type=simple
+        ExecStart={python} {provider_script} --config {config_path} --service
+        Restart=on-failure
+        RestartSec=10
+        Environment=PYTHONUNBUFFERED=1
+
+        [Install]
+        WantedBy=default.target
+    """)
+
+
+def _generate_launchd_plist(provider_script: Path, config_path: Path) -> str:
+    """Generate a macOS LaunchAgent plist."""
+    python = Path(sys.executable).resolve()
+    log_dir = Path.home() / "Library" / "Logs" / "mars-gpu-provider"
+    return textwrap.dedent(f"""\
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>Label</key>
+            <string>{LAUNCHD_LABEL}</string>
+            <key>ProgramArguments</key>
+            <array>
+                <string>{python}</string>
+                <string>{provider_script}</string>
+                <string>--config</string>
+                <string>{config_path}</string>
+                <string>--service</string>
+            </array>
+            <key>RunAtLoad</key>
+            <true/>
+            <key>KeepAlive</key>
+            <true/>
+            <key>StandardOutPath</key>
+            <string>{log_dir}/stdout.log</string>
+            <key>StandardErrorPath</key>
+            <string>{log_dir}/stderr.log</string>
+            <key>EnvironmentVariables</key>
+            <dict>
+                <key>PYTHONUNBUFFERED</key>
+                <string>1</string>
+            </dict>
+        </dict>
+        </plist>
+    """)
+
+
+def do_install() -> None:
+    """Install the MARS GPU provider as a system service."""
+    provider_script = Path(__file__).resolve()
+    config_path = _resolve_config_path()
+
+    # Step 1: ensure config exists
+    if not config_path.exists():
+        print(f"\n  Config file not found: {config_path}")
+        print("  Running interactive setup first...\n")
+        gpu = detect_gpu()
+        models = detect_ollama_models()
+        if not models:
+            print("  No Ollama models found. Is Ollama running?")
+            sys.exit(1)
+        interactive_setup(gpu, models, "http://localhost:11434")
+        if not config_path.exists():
+            print("  Setup did not create a config file. Aborting.")
+            sys.exit(1)
+
+    platform = sys.platform
+
+    if platform == "linux":
+        _install_systemd(provider_script, config_path)
+    elif platform == "darwin":
+        _install_launchd(provider_script, config_path)
+    elif platform == "win32":
+        _install_windows_hint()
+    else:
+        print(f"  Unsupported platform: {platform}")
+        sys.exit(1)
+
+
+def _install_systemd(provider_script: Path, config_path: Path) -> None:
+    """Install as a systemd user service (Linux)."""
+    unit_dir = Path.home() / ".config" / "systemd" / "user"
+    unit_dir.mkdir(parents=True, exist_ok=True)
+    unit_file = unit_dir / f"{SERVICE_NAME}.service"
+
+    unit_content = _generate_systemd_unit(provider_script, config_path)
+    unit_file.write_text(unit_content)
+    print(f"  Created service file: {unit_file}")
+
+    # daemon-reload
+    result = subprocess.run(
+        ["systemctl", "--user", "daemon-reload"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  Warning: daemon-reload failed: {result.stderr.strip()}")
+
+    # enable
+    result = subprocess.run(
+        ["systemctl", "--user", "enable", SERVICE_NAME],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  Warning: enable failed: {result.stderr.strip()}")
+    else:
+        print(f"  Enabled {SERVICE_NAME}")
+
+    # enable-linger so service survives logout
+    user = getpass.getuser()
+    result = subprocess.run(
+        ["loginctl", "enable-linger", user],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  Warning: enable-linger failed: {result.stderr.strip()}")
+        print("  You may need to run: sudo loginctl enable-linger $USER")
+    else:
+        print(f"  Enabled linger for user '{user}'")
+
+    # start
+    result = subprocess.run(
+        ["systemctl", "--user", "start", SERVICE_NAME],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  Warning: start failed: {result.stderr.strip()}")
+    else:
+        print(f"  Started {SERVICE_NAME}")
+
+    print()
+    print("  ╔══════════════════════════════════════════════════════╗")
+    print("  ║      MARS GPU Provider — Installed as Service       ║")
+    print("  ╚══════════════════════════════════════════════════════╝")
+    print()
+    print(f"  Service:  {SERVICE_NAME}")
+    print(f"  Config:   {config_path}")
+    print(f"  Unit:     {unit_file}")
+    print()
+    print(f"  Check status:   python {provider_script.name} --status")
+    print(f"  View logs:      journalctl --user -u {SERVICE_NAME} -f")
+    print(f"  Uninstall:      python {provider_script.name} --uninstall")
+    print()
+
+
+def _install_launchd(provider_script: Path, config_path: Path) -> None:
+    """Install as a macOS LaunchAgent."""
+    plist_dir = Path.home() / "Library" / "LaunchAgents"
+    plist_dir.mkdir(parents=True, exist_ok=True)
+    plist_file = plist_dir / f"{LAUNCHD_LABEL}.plist"
+
+    log_dir = Path.home() / "Library" / "Logs" / "mars-gpu-provider"
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    plist_content = _generate_launchd_plist(provider_script, config_path)
+    plist_file.write_text(plist_content)
+    print(f"  Created plist: {plist_file}")
+
+    # load the agent
+    result = subprocess.run(
+        ["launchctl", "load", str(plist_file)],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"  Warning: launchctl load failed: {result.stderr.strip()}")
+    else:
+        print(f"  Loaded {LAUNCHD_LABEL}")
+
+    print()
+    print("  ╔══════════════════════════════════════════════════════╗")
+    print("  ║      MARS GPU Provider — Installed as Service       ║")
+    print("  ╚══════════════════════════════════════════════════════╝")
+    print()
+    print(f"  Service:  {LAUNCHD_LABEL}")
+    print(f"  Config:   {config_path}")
+    print(f"  Plist:    {plist_file}")
+    print()
+    print(f"  Check status:   python {provider_script.name} --status")
+    print(f"  View logs:      cat ~/Library/Logs/mars-gpu-provider/stdout.log")
+    print(f"  Uninstall:      python {provider_script.name} --uninstall")
+    print()
+
+
+def _install_windows_hint() -> None:
+    """Print Windows installation instructions."""
+    print()
+    print("  ╔══════════════════════════════════════════════════════╗")
+    print("  ║      MARS GPU Provider — Windows Instructions       ║")
+    print("  ╚══════════════════════════════════════════════════════╝")
+    print()
+    print("  Automatic service installation is not supported on Windows.")
+    print("  Options:")
+    print()
+    print("  1. Task Scheduler (recommended):")
+    print("     - Open Task Scheduler (taskschd.msc)")
+    print("     - Create Basic Task > 'MARS GPU Provider'")
+    print("     - Trigger: 'When I log on'")
+    print(f"     - Action: Start a program")
+    print(f"       Program: {sys.executable}")
+    print(f"       Arguments: {Path(__file__).resolve()} --config mars-provider.json --service")
+    print()
+    print("  2. WSL (if running in Windows Subsystem for Linux):")
+    print("     - Use --install from within WSL (systemd support required)")
+    print()
+
+
+def do_uninstall() -> None:
+    """Uninstall the MARS GPU provider service."""
+    platform = sys.platform
+
+    if platform == "linux":
+        _uninstall_systemd()
+    elif platform == "darwin":
+        _uninstall_launchd()
+    elif platform == "win32":
+        print("  Remove the MARS GPU Provider task from Task Scheduler manually.")
+    else:
+        print(f"  Unsupported platform: {platform}")
+        sys.exit(1)
+
+
+def _uninstall_systemd() -> None:
+    """Uninstall the systemd user service."""
+    unit_file = Path.home() / ".config" / "systemd" / "user" / f"{SERVICE_NAME}.service"
+
+    # stop
+    subprocess.run(
+        ["systemctl", "--user", "stop", SERVICE_NAME],
+        capture_output=True, text=True,
+    )
+    print(f"  Stopped {SERVICE_NAME}")
+
+    # disable
+    subprocess.run(
+        ["systemctl", "--user", "disable", SERVICE_NAME],
+        capture_output=True, text=True,
+    )
+    print(f"  Disabled {SERVICE_NAME}")
+
+    # remove unit file
+    if unit_file.exists():
+        unit_file.unlink()
+        print(f"  Removed {unit_file}")
+    else:
+        print(f"  Unit file not found: {unit_file}")
+
+    # daemon-reload
+    subprocess.run(
+        ["systemctl", "--user", "daemon-reload"],
+        capture_output=True, text=True,
+    )
+    print(f"  Reloaded systemd daemon")
+
+    # clean up PID file
+    remove_pid_file()
+
+    print()
+    print(f"  MARS GPU Provider service has been uninstalled.")
+    print()
+
+
+def _uninstall_launchd() -> None:
+    """Uninstall the macOS LaunchAgent."""
+    plist_file = Path.home() / "Library" / "LaunchAgents" / f"{LAUNCHD_LABEL}.plist"
+
+    # unload
+    if plist_file.exists():
+        subprocess.run(
+            ["launchctl", "unload", str(plist_file)],
+            capture_output=True, text=True,
+        )
+        print(f"  Unloaded {LAUNCHD_LABEL}")
+
+        plist_file.unlink()
+        print(f"  Removed {plist_file}")
+    else:
+        print(f"  Plist not found: {plist_file}")
+
+    # clean up PID file
+    remove_pid_file()
+
+    print()
+    print(f"  MARS GPU Provider service has been uninstalled.")
+    print()
+
+
+def do_status() -> None:
+    """Check the status of the MARS GPU provider service."""
+    platform = sys.platform
+
+    if platform == "linux":
+        result = subprocess.run(
+            ["systemctl", "--user", "status", SERVICE_NAME],
+            capture_output=True, text=True,
+        )
+        print(result.stdout)
+        if result.stderr:
+            print(result.stderr)
+    elif platform == "darwin":
+        result = subprocess.run(
+            ["launchctl", "list", LAUNCHD_LABEL],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            print(result.stdout)
+        else:
+            print(f"  Service '{LAUNCHD_LABEL}' is not loaded.")
+            if result.stderr:
+                print(result.stderr)
+    elif platform == "win32":
+        print("  Check Task Scheduler for the MARS GPU Provider task.")
+    else:
+        print(f"  Unsupported platform: {platform}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────
 
 
@@ -431,27 +819,91 @@ def main() -> None:
                         help="Override public endpoint (skip ngrok)")
     parser.add_argument("--no-ngrok", action="store_true",
                         help="Don't auto-start ngrok")
+    parser.add_argument("--install", action="store_true",
+                        help="Install as a system service (systemd/launchd)")
+    parser.add_argument("--uninstall", action="store_true",
+                        help="Uninstall the system service")
+    parser.add_argument("--status", action="store_true",
+                        help="Check the status of the system service")
+    parser.add_argument("--service", action="store_true",
+                        help="Run in service mode (no interactive prompts, log to stdout)")
     args = parser.parse_args()
+
+    # Handle service management commands first
+    if args.install:
+        do_install()
+        return
+
+    if args.uninstall:
+        do_uninstall()
+        return
+
+    if args.status:
+        do_status()
+        return
+
+    # Check for existing running instance via PID file
+    if check_existing_instance():
+        pid = int(PID_FILE.read_text().strip())
+        log.warning(
+            "Another MARS GPU provider instance appears to be running (PID %d). "
+            "If this is stale, remove %s and retry.",
+            pid, PID_FILE,
+        )
+        if not args.service:
+            answer = input("  Continue anyway? [y/N]: ").strip().lower()
+            if answer not in ("y", "yes"):
+                sys.exit(1)
+
+    # Write PID file and ensure cleanup on exit
+    write_pid_file()
+
+    def _cleanup_pid(signum: int | None = None, frame: Any = None) -> None:
+        remove_pid_file()
+        if signum is not None:
+            sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _cleanup_pid)
+
+    # In service mode, suppress interactive prompts
+    if args.service:
+        # Reconfigure logging for journald (stdout)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(message)s",
+            force=True,
+        )
 
     # Detect hardware
     gpu = detect_gpu()
     models = detect_ollama_models(args.ollama)
 
     if not models:
-        print()
-        print("  No Ollama models found. Is Ollama running?")
-        print()
-        print("  Install Ollama:  curl -fsSL https://ollama.com/install.sh | sh")
-        print("  Start Ollama:    ollama serve")
-        print("  Pull a model:    ollama pull llama4")
-        print()
+        if args.service:
+            log.error("No Ollama models found. Is Ollama running?")
+        else:
+            print()
+            print("  No Ollama models found. Is Ollama running?")
+            print()
+            print("  Install Ollama:  curl -fsSL https://ollama.com/install.sh | sh")
+            print("  Start Ollama:    ollama serve")
+            print("  Pull a model:    ollama pull llama4")
+            print()
+        remove_pid_file()
         sys.exit(1)
 
     # Load or create config
     config_path = args.config or CONFIG_FILE
     if config_path.exists():
         config = json.loads(config_path.read_text())
-        print(f"\n  Loaded config from {config_path}")
+        if args.service:
+            log.info("Loaded config from %s", config_path)
+        else:
+            print(f"\n  Loaded config from {config_path}")
+    elif args.service:
+        log.error("Config file not found: %s. Run setup first.", config_path)
+        remove_pid_file()
+        sys.exit(1)
     else:
         config = interactive_setup(gpu, models, args.ollama)
 
@@ -464,15 +916,15 @@ def main() -> None:
     # Determine endpoint
     if args.endpoint:
         endpoint = args.endpoint
-    elif not args.no_ngrok:
+    elif not args.no_ngrok and not args.service:
         print("  Starting ngrok tunnel...")
         ollama_port = int(args.ollama.rsplit(":", 1)[-1])
         ngrok_url = start_ngrok(ollama_port)
         if ngrok_url:
             endpoint = ngrok_url
-            print(f"  ✓ Public endpoint: {endpoint}")
+            print(f"  Public endpoint: {endpoint}")
         else:
-            print("  ⚠ Ngrok not available — using localhost (only reachable locally)")
+            print("  Ngrok not available -- using localhost (only reachable locally)")
             print("    Install ngrok: https://ngrok.com/download")
             endpoint = args.ollama
     else:
@@ -484,25 +936,32 @@ def main() -> None:
     refresh = config.get("refresh_secs", 1800)
     price = config.get("price_per_mtok", 0.0)
 
-    print()
-    print("  ╔══════════════════════════════════════════════════════╗")
-    print("  ║           MARS GPU Provider — Starting              ║")
-    print("  ╚══════════════════════════════════════════════════════╝")
-    print()
-    print(f"  GPU:      {gpu['gpu_name']} ({gpu['vram_mb']} MB VRAM)")
-    print(f"  Models:   {len(selected_models)}")
-    print(f"  Endpoint: {endpoint}")
-    print(f"  Price:    {'FREE' if price == 0 else f'${price:.2f}/M tokens'}")
-    print(f"  Region:   {config.get('region', 'unknown')}")
-    if config.get("stripe_account"):
-        print(f"  Stripe:   {config['stripe_account']}")
-    print(f"  Gateway:  {gateway}")
-    print(f"  Refresh:  every {refresh}s")
-    print()
-    for desc in descriptors:
-        p = desc["params"]
-        print(f"  {desc['type']:45s} {p['model']}")
-    print()
+    if args.service:
+        log.info(
+            "Starting: GPU=%s, models=%d, endpoint=%s, price=%s, gateway=%s",
+            gpu["gpu_name"], len(selected_models), endpoint,
+            "FREE" if price == 0 else f"${price:.2f}/M tokens", gateway,
+        )
+    else:
+        print()
+        print("  ╔══════════════════════════════════════════════════════╗")
+        print("  ║           MARS GPU Provider — Starting              ║")
+        print("  ╚══════════════════════════════════════════════════════╝")
+        print()
+        print(f"  GPU:      {gpu['gpu_name']} ({gpu['vram_mb']} MB VRAM)")
+        print(f"  Models:   {len(selected_models)}")
+        print(f"  Endpoint: {endpoint}")
+        print(f"  Price:    {'FREE' if price == 0 else f'${price:.2f}/M tokens'}")
+        print(f"  Region:   {config.get('region', 'unknown')}")
+        if config.get("stripe_account"):
+            print(f"  Stripe:   {config['stripe_account']}")
+        print(f"  Gateway:  {gateway}")
+        print(f"  Refresh:  every {refresh}s")
+        print()
+        for desc in descriptors:
+            p = desc["params"]
+            print(f"  {desc['type']:45s} {p['model']}")
+        print()
 
     while True:
         ids = publish_descriptors(gateway, descriptors)
@@ -510,7 +969,11 @@ def main() -> None:
         try:
             time.sleep(refresh)
         except KeyboardInterrupt:
-            print("\n  Shutting down. Your GPU is no longer on the mesh.")
+            if args.service:
+                log.info("Shutting down. Your GPU is no longer on the mesh.")
+            else:
+                print("\n  Shutting down. Your GPU is no longer on the mesh.")
+            remove_pid_file()
             break
 
 
