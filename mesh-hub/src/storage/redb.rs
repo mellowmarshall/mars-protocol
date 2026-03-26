@@ -22,6 +22,8 @@ const RATE_LIMIT_WINDOW_MICROS: u64 = 60_000_000;
 pub struct RedbStorage {
     db: Database,
     rate_timestamps: HashMap<Vec<u8>, Vec<u64>>,
+    /// When true, bypass per-publisher rate limits (used for internal seeding).
+    pub skip_rate_limit: bool,
 }
 
 pub(crate) fn hash_bytes(h: &Hash) -> Vec<u8> {
@@ -68,6 +70,7 @@ impl RedbStorage {
         Ok(Self {
             db,
             rate_timestamps: HashMap::new(),
+            skip_rate_limit: false,
         })
     }
 
@@ -102,8 +105,8 @@ impl DescriptorStorage for RedbStorage {
             .validate(now_micros)
             .map_err(|e| StoreError::ValidationFailed(e.to_string()))?;
 
-        // Rate limit (in-memory)
-        if !self.check_rate_limit(&descriptor.publisher, now_micros) {
+        // Rate limit (in-memory) — skipped for internal operations
+        if !self.skip_rate_limit && !self.check_rate_limit(&descriptor.publisher, now_micros) {
             return Err(StoreError::RateLimited {
                 limit: RATE_LIMIT_PER_MINUTE,
             });

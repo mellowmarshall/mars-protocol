@@ -25,6 +25,8 @@ pub struct HubConfig {
     pub mu_costs: MuCosts,
     #[serde(default)]
     pub observability: ObservabilityConfig,
+    #[serde(default)]
+    pub seeding: SeedingConfig,
     /// Operator bearer token for admin API authentication.
     pub operator_token: Option<String>,
     /// Rate limiting configuration (not TOML-deserializable, uses defaults).
@@ -259,6 +261,34 @@ impl Default for ObservabilityConfig {
             metrics_enabled: true,
         }
     }
+}
+
+/// Seeding configuration — pre-populate the hub with services on startup.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SeedingConfig {
+    /// Enable automatic seeding (default: false).
+    #[serde(default)]
+    pub enabled: bool,
+    /// Path to a JSON seed file containing service descriptors.
+    #[serde(default)]
+    pub seed_file: Option<PathBuf>,
+    /// Interval in seconds between re-seed cycles (default: 1800 = 30min).
+    #[serde(default = "default_seed_interval")]
+    pub interval_secs: u64,
+}
+
+impl Default for SeedingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            seed_file: None,
+            interval_secs: default_seed_interval(),
+        }
+    }
+}
+
+fn default_seed_interval() -> u64 {
+    1800
 }
 
 fn default_mu_store_new() -> i64 {

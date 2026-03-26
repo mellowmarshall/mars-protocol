@@ -14,6 +14,7 @@ pub mod network;
 pub mod peering;
 pub mod policy;
 pub mod rate_limit;
+pub mod seeding;
 pub mod storage;
 pub mod tenant;
 
@@ -58,6 +59,8 @@ pub struct HubRuntime {
     rate_limiter: Arc<HubRateLimiter>,
     /// Hub metrics (None if observability is disabled).
     metrics: Option<HubMetrics>,
+    /// Hub keypair (copy for seeding).
+    keypair: Keypair,
 }
 
 impl HubRuntime {
@@ -175,6 +178,39 @@ impl HubRuntime {
             });
 
             tracing::info!("hub peering enabled");
+        }
+
+        // Spawn seeding background task (if enabled)
+        if self.config.seeding.enabled {
+            if let Some(ref seed_file) = self.config.seeding.seed_file {
+                match seeding::load_seed_file(seed_file) {
+                    Ok(entries) => {
+                        // Seed immediately on startup
+                        let (ok, fail) = seeding::seed_now(
+                            &self.dht_node,
+                            &self.keypair,
+                            &entries,
+                        );
+                        tracing::info!(ok, fail, "initial seeding complete");
+
+                        // Spawn periodic re-seeder
+                        let interval = Duration::from_secs(self.config.seeding.interval_secs);
+                        seeding::spawn_seeder(
+                            self.dht_node.clone(),
+                            Keypair::from_bytes(&self.keypair.secret_bytes()),
+                            entries,
+                            interval,
+                        );
+                        tracing::info!(
+                            interval_secs = self.config.seeding.interval_secs,
+                            "seeding background task started"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, path = %seed_file.display(), "failed to load seed file");
+                    }
+                }
+            }
         }
 
         tracing::info!(
@@ -296,6 +332,7 @@ impl HubBuilder {
             None
         };
 
+        let seeding_keypair = Keypair::from_bytes(&self.keypair.secret_bytes());
         let dht_node =
             DhtNode::with_store(self.keypair, node_addr, DhtConfig::default(), cached_storage)
                 .with_hooks(hook);
@@ -310,6 +347,7 @@ impl HubBuilder {
             peer_manager,
             rate_limiter,
             metrics: hub_metrics,
+            keypair: seeding_keypair,
         })
     }
 }

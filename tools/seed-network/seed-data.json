@@ -1,0 +1,837 @@
+[
+  {
+    "type": "data/search/web",
+    "endpoint": "https://api.duckduckgo.com/",
+    "params": {
+      "name": "DuckDuckGo Instant Answer",
+      "format": "json",
+      "auth": "none",
+      "docs": "https://api.duckduckgo.com/api"
+    }
+  },
+  {
+    "type": "data/search/web",
+    "endpoint": "https://en.wikipedia.org/w/api.php",
+    "params": {
+      "name": "Wikipedia",
+      "format": "json",
+      "auth": "none",
+      "docs": "https://www.mediawiki.org/wiki/API:Main_page"
+    }
+  },
+  {
+    "type": "data/weather/current",
+    "endpoint": "https://api.open-meteo.com/v1/forecast",
+    "params": {
+      "name": "Open-Meteo",
+      "auth": "none",
+      "docs": "https://open-meteo.com/en/docs"
+    }
+  },
+  {
+    "type": "data/weather/forecast",
+    "endpoint": "https://api.open-meteo.com/v1/forecast",
+    "params": {
+      "name": "Open-Meteo Forecast",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/geo/geocoding",
+    "endpoint": "https://nominatim.openstreetmap.org/search",
+    "params": {
+      "name": "Nominatim (OpenStreetMap)",
+      "format": "json",
+      "auth": "none",
+      "docs": "https://nominatim.org/release-docs/latest/api/Search/"
+    }
+  },
+  {
+    "type": "data/geo/reverse",
+    "endpoint": "https://nominatim.openstreetmap.org/reverse",
+    "params": {
+      "name": "Nominatim Reverse",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/time/timezone",
+    "endpoint": "http://worldtimeapi.org/api/timezone",
+    "params": {
+      "name": "WorldTimeAPI",
+      "format": "json",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/finance/exchange-rates",
+    "endpoint": "https://api.exchangerate-api.com/v4/latest/USD",
+    "params": {
+      "name": "ExchangeRate-API",
+      "auth": "none",
+      "docs": "https://www.exchangerate-api.com/docs/overview"
+    }
+  },
+  {
+    "type": "data/network/ip-info",
+    "endpoint": "https://ipapi.co/json/",
+    "params": {
+      "name": "ipapi.co",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/network/ip-geolocation",
+    "endpoint": "https://ipinfo.io/json",
+    "params": {
+      "name": "IPinfo",
+      "auth": "free-tier"
+    }
+  },
+  {
+    "type": "data/utility/uuid",
+    "endpoint": "https://httpbin.org/uuid",
+    "params": {
+      "name": "httpbin UUID",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/utility/user-agent",
+    "endpoint": "https://httpbin.org/user-agent",
+    "params": {
+      "name": "httpbin User-Agent",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/code/github-repos",
+    "endpoint": "https://api.github.com/search/repositories",
+    "params": {
+      "name": "GitHub Search API",
+      "auth": "optional-token",
+      "docs": "https://docs.github.com/en/rest/search"
+    }
+  },
+  {
+    "type": "data/code/github-users",
+    "endpoint": "https://api.github.com/users",
+    "params": {
+      "name": "GitHub Users API",
+      "auth": "optional-token"
+    }
+  },
+  {
+    "type": "data/news/hacker-news",
+    "endpoint": "https://hacker-news.firebaseio.com/v0",
+    "params": {
+      "name": "Hacker News API",
+      "format": "json",
+      "auth": "none",
+      "docs": "https://github.com/HackerNews/API"
+    }
+  },
+  {
+    "type": "data/text/dictionary",
+    "endpoint": "https://api.dictionaryapi.dev/api/v2/entries/en",
+    "params": {
+      "name": "Free Dictionary API",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/images/placeholder",
+    "endpoint": "https://picsum.photos",
+    "params": {
+      "name": "Lorem Picsum",
+      "auth": "none",
+      "docs": "https://picsum.photos"
+    }
+  },
+  {
+    "type": "data/science/iss-position",
+    "endpoint": "http://api.open-notify.org/iss-now.json",
+    "params": {
+      "name": "ISS Position",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/science/astronomy-picture",
+    "endpoint": "https://api.nasa.gov/planetary/apod",
+    "params": {
+      "name": "NASA APOD",
+      "auth": "api_key=DEMO_KEY"
+    }
+  },
+  {
+    "type": "data/reference/countries",
+    "endpoint": "https://restcountries.com/v3.1/all",
+    "params": {
+      "name": "REST Countries",
+      "auth": "none",
+      "docs": "https://restcountries.com"
+    }
+  },
+  {
+    "type": "data/fun/jokes",
+    "endpoint": "https://official-joke-api.appspot.com/random_joke",
+    "params": {
+      "name": "Official Joke API",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "data/fun/cat-facts",
+    "endpoint": "https://catfact.ninja/fact",
+    "params": {
+      "name": "Cat Facts",
+      "auth": "none"
+    }
+  },
+  {
+    "type": "mcp/tool/web-fetch",
+    "endpoint": "npx:-y:@anthropic/mcp-server-fetch",
+    "params": {
+      "name": "Web Fetch",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "installs": "180000+",
+      "description": "Fetch web pages for research and fact-checking"
+    }
+  },
+  {
+    "type": "mcp/tool/brave-search",
+    "endpoint": "npx:-y:@anthropic/mcp-server-brave-search",
+    "params": {
+      "name": "Brave Search",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Web search via Brave Search API",
+      "auth": "BRAVE_API_KEY"
+    }
+  },
+  {
+    "type": "mcp/tool/filesystem",
+    "endpoint": "npx:-y:@anthropic/mcp-server-filesystem",
+    "params": {
+      "name": "Filesystem",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Read, write, and manage files"
+    }
+  },
+  {
+    "type": "mcp/tool/github",
+    "endpoint": "npx:-y:@anthropic/mcp-server-github",
+    "params": {
+      "name": "GitHub",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "GitHub API integration \u2014 repos, issues, PRs",
+      "auth": "GITHUB_TOKEN"
+    }
+  },
+  {
+    "type": "mcp/tool/postgres",
+    "endpoint": "npx:-y:@anthropic/mcp-server-postgres",
+    "params": {
+      "name": "PostgreSQL",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Query PostgreSQL databases"
+    }
+  },
+  {
+    "type": "mcp/tool/sqlite",
+    "endpoint": "npx:-y:@anthropic/mcp-server-sqlite",
+    "params": {
+      "name": "SQLite",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Read and query SQLite databases"
+    }
+  },
+  {
+    "type": "mcp/tool/memory",
+    "endpoint": "npx:-y:@anthropic/mcp-server-memory",
+    "params": {
+      "name": "Memory",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Persistent memory via knowledge graph"
+    }
+  },
+  {
+    "type": "mcp/tool/puppeteer",
+    "endpoint": "npx:-y:@anthropic/mcp-server-puppeteer",
+    "params": {
+      "name": "Puppeteer",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Browser automation via Puppeteer"
+    }
+  },
+  {
+    "type": "mcp/tool/slack",
+    "endpoint": "npx:-y:@anthropic/mcp-server-slack",
+    "params": {
+      "name": "Slack",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Slack workspace integration",
+      "auth": "SLACK_TOKEN"
+    }
+  },
+  {
+    "type": "mcp/tool/google-maps",
+    "endpoint": "npx:-y:@anthropic/mcp-server-google-maps",
+    "params": {
+      "name": "Google Maps",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Geocoding, directions, places",
+      "auth": "GOOGLE_MAPS_KEY"
+    }
+  },
+  {
+    "type": "mcp/tool/tavily-search",
+    "endpoint": "npx:-y:tavily-mcp-server",
+    "params": {
+      "name": "Tavily Search",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "AI-optimized web search",
+      "auth": "TAVILY_API_KEY"
+    }
+  },
+  {
+    "type": "mcp/tool/playwright",
+    "endpoint": "npx:-y:@anthropic/mcp-server-playwright",
+    "params": {
+      "name": "Playwright",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Browser automation via Playwright"
+    }
+  },
+  {
+    "type": "mcp/tool/sequential-thinking",
+    "endpoint": "npx:-y:@anthropic/mcp-server-sequential-thinking",
+    "params": {
+      "name": "Sequential Thinking",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Step-by-step reasoning tool"
+    }
+  },
+  {
+    "type": "mcp/tool/context7",
+    "endpoint": "npx:-y:@context7/mcp-server",
+    "params": {
+      "name": "Context7",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Up-to-date library documentation"
+    }
+  },
+  {
+    "type": "mcp/tool/firecrawl",
+    "endpoint": "npx:-y:firecrawl-mcp",
+    "params": {
+      "name": "Firecrawl",
+      "protocol": "mcp",
+      "transport": "stdio",
+      "description": "Web scraping and crawling",
+      "auth": "FIRECRAWL_API_KEY"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/THUDM/GLM-5",
+    "params": {
+      "name": "GLM-5 (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "THUDM/GLM-5",
+      "description": "GLM-5 \u2014 top-ranked open-weight model, reasoning"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/deepseek-ai/DeepSeek-V3.2",
+    "params": {
+      "name": "DeepSeek V3.2 (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "deepseek-ai/DeepSeek-V3.2",
+      "description": "DeepSeek V3.2 \u2014 latest MoE, MIT license, frontier reasoning"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/Qwen/Qwen3.5-397B-A17B",
+    "params": {
+      "name": "Qwen3.5 397B (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "Qwen/Qwen3.5-397B-A17B",
+      "description": "Qwen3.5 \u2014 397B total / 17B active MoE, multilingual, Apache 2.0"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/moonshotai/Kimi-K2.5",
+    "params": {
+      "name": "Kimi K2.5 (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "moonshotai/Kimi-K2.5",
+      "description": "Kimi K2.5 \u2014 #2 open-weight model, reasoning, Moonshot AI"
+    }
+  },
+  {
+    "type": "compute/inference/reasoning",
+    "endpoint": "https://api-inference.huggingface.co/models/deepseek-ai/DeepSeek-R1",
+    "params": {
+      "name": "DeepSeek R1 (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "deepseek-ai/DeepSeek-R1",
+      "description": "DeepSeek R1 \u2014 chain-of-thought reasoning, competitive with o3"
+    }
+  },
+  {
+    "type": "compute/inference/code-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/Qwen/Qwen3-Coder-Next",
+    "params": {
+      "name": "Qwen3 Coder (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "Qwen/Qwen3-Coder-Next",
+      "description": "Qwen3 Coder \u2014 optimized for agentic coding workflows"
+    }
+  },
+  {
+    "type": "compute/inference/embeddings",
+    "endpoint": "https://api-inference.huggingface.co/models/BAAI/bge-large-en-v1.5",
+    "params": {
+      "name": "BGE Large Embeddings (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "BAAI/bge-large-en-v1.5",
+      "description": "State-of-the-art text embeddings for RAG and semantic search"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev",
+    "params": {
+      "name": "FLUX.1 Dev (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "black-forest-labs/FLUX.1-dev",
+      "description": "FLUX.1 \u2014 state-of-the-art image generation from Black Forest Labs"
+    }
+  },
+  {
+    "type": "compute/inference/speech-to-text",
+    "endpoint": "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
+    "params": {
+      "name": "Whisper Large v3 Turbo (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "openai/whisper-large-v3-turbo",
+      "description": "Whisper v3 Turbo \u2014 fast, accurate speech recognition"
+    }
+  },
+  {
+    "type": "compute/inference/translation",
+    "endpoint": "https://api-inference.huggingface.co/models/facebook/nllb-200-distilled-600M",
+    "params": {
+      "name": "NLLB Translation (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "facebook/nllb-200-distilled-600M",
+      "description": "No Language Left Behind \u2014 200+ language translation"
+    }
+  },
+  {
+    "type": "data/search/ai",
+    "endpoint": "https://api.tavily.com/search",
+    "params": {
+      "name": "Tavily",
+      "description": "AI-optimized web search \u2014 aggregates 20 sources, scores and ranks for relevance",
+      "free_tier": "1,000 credits/month",
+      "auth": "TAVILY_API_KEY",
+      "docs": "https://docs.tavily.com",
+      "github": "https://github.com/tavily-ai/tavily-python"
+    }
+  },
+  {
+    "type": "data/search/ai",
+    "endpoint": "https://api.exa.ai/search",
+    "params": {
+      "name": "Exa",
+      "description": "Neural search engine with embeddings-powered next-link prediction",
+      "free_tier": "1,000 credits",
+      "auth": "EXA_API_KEY",
+      "docs": "https://docs.exa.ai",
+      "github": "https://github.com/exa-labs/exa-py"
+    }
+  },
+  {
+    "type": "data/search/serp",
+    "endpoint": "https://google.serper.dev/search",
+    "params": {
+      "name": "Serper",
+      "description": "Google SERP API \u2014 search, images, news, maps, shopping, scholar",
+      "free_tier": "2,500 queries free, no card required",
+      "auth": "SERPER_API_KEY",
+      "docs": "https://serper.dev/docs"
+    }
+  },
+  {
+    "type": "data/search/web",
+    "endpoint": "https://api.search.brave.com/res/v1/web/search",
+    "params": {
+      "name": "Brave Search API",
+      "description": "Independent web search with AI snippets",
+      "free_tier": "2,000 queries/month",
+      "auth": "BRAVE_API_KEY",
+      "docs": "https://brave.com/search/api/"
+    }
+  },
+  {
+    "type": "data/scraping/web",
+    "endpoint": "https://api.firecrawl.dev/v1/scrape",
+    "params": {
+      "name": "Firecrawl",
+      "description": "Web scraping API \u2014 turns websites into LLM-ready data",
+      "free_tier": "500 credits/month, no card required",
+      "auth": "FIRECRAWL_API_KEY",
+      "docs": "https://docs.firecrawl.dev",
+      "github": "https://github.com/mendableai/firecrawl"
+    }
+  },
+  {
+    "type": "data/scraping/web",
+    "endpoint": "https://api.apify.com/v2",
+    "params": {
+      "name": "Apify",
+      "description": "Web scraping platform with 1,600+ ready-made scrapers",
+      "free_tier": "$5/month free",
+      "auth": "APIFY_TOKEN",
+      "docs": "https://docs.apify.com/api/v2"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.puter.com/ai/chat",
+    "params": {
+      "name": "Puter.js (Free GPT)",
+      "description": "Free GPT access \u2014 no API key required, runs from frontend",
+      "free_tier": "unlimited",
+      "auth": "none",
+      "docs": "https://developer.puter.com"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "params": {
+      "name": "OpenRouter",
+      "description": "API aggregator \u2014 hundreds of free and paid LLMs through one endpoint",
+      "free_tier": "$5 free credits for new users",
+      "auth": "OPENROUTER_API_KEY",
+      "docs": "https://openrouter.ai/docs"
+    }
+  },
+  {
+    "type": "compute/messaging/email",
+    "endpoint": "https://api.resend.com/emails",
+    "params": {
+      "name": "Resend",
+      "description": "Developer-first email API",
+      "free_tier": "3,000 emails/month, 100/day",
+      "auth": "RESEND_API_KEY",
+      "docs": "https://resend.com/docs",
+      "github": "https://github.com/resend/resend-python"
+    }
+  },
+  {
+    "type": "compute/database/postgres",
+    "endpoint": "https://console.neon.tech",
+    "params": {
+      "name": "Neon Serverless Postgres",
+      "description": "Serverless Postgres with branching \u2014 agents can spin up databases",
+      "free_tier": "0.5 GB storage, always free",
+      "auth": "NEON_API_KEY",
+      "docs": "https://neon.tech/docs"
+    }
+  },
+  {
+    "type": "compute/database/redis",
+    "endpoint": "https://api.upstash.com",
+    "params": {
+      "name": "Upstash Redis",
+      "description": "Serverless Redis \u2014 agent memory, caching, rate limiting",
+      "free_tier": "10,000 commands/day",
+      "auth": "UPSTASH_TOKEN",
+      "docs": "https://upstash.com/docs/redis"
+    }
+  },
+  {
+    "type": "compute/database/vector",
+    "endpoint": "https://api.upstash.com/v2/vector",
+    "params": {
+      "name": "Upstash Vector",
+      "description": "Serverless vector database for RAG and semantic search",
+      "free_tier": "10,000 vectors, 1,000 queries/day",
+      "auth": "UPSTASH_TOKEN",
+      "docs": "https://upstash.com/docs/vector"
+    }
+  },
+  {
+    "type": "compute/document/parsing",
+    "endpoint": "https://api.unstructured.io/general/v0/general",
+    "params": {
+      "name": "Unstructured.io",
+      "description": "Parse PDFs, Word docs, HTML into structured data for LLMs",
+      "free_tier": "1,000 pages/month",
+      "auth": "UNSTRUCTURED_API_KEY",
+      "docs": "https://docs.unstructured.io"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://api.together.xyz/v1/images/generations",
+    "params": {
+      "name": "Together AI (FLUX)",
+      "description": "FLUX and Stable Diffusion image generation",
+      "free_tier": "$5 free credits",
+      "auth": "TOGETHER_API_KEY",
+      "docs": "https://docs.together.ai"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://fal.run",
+    "params": {
+      "name": "fal.ai",
+      "description": "Fast image generation \u2014 FLUX, SDXL, ControlNet",
+      "free_tier": "$10 free credits",
+      "auth": "FAL_KEY",
+      "docs": "https://fal.ai/docs"
+    }
+  },
+  {
+    "type": "compute/sandbox/code",
+    "endpoint": "https://api.e2b.dev",
+    "params": {
+      "name": "E2B Code Sandbox",
+      "description": "Cloud sandboxes for AI agents to execute code safely",
+      "free_tier": "100 sandbox hours/month",
+      "auth": "E2B_API_KEY",
+      "docs": "https://e2b.dev/docs",
+      "github": "https://github.com/e2b-dev/e2b"
+    }
+  },
+  {
+    "type": "compute/observability/tracing",
+    "endpoint": "https://api.langfuse.com",
+    "params": {
+      "name": "Langfuse",
+      "description": "Open-source LLM observability \u2014 traces, evals, prompt management",
+      "free_tier": "50K observations/month",
+      "auth": "LANGFUSE_API_KEY",
+      "docs": "https://langfuse.com/docs",
+      "github": "https://github.com/langfuse/langfuse"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.together.xyz/v1/chat/completions",
+    "params": {
+      "name": "Together AI",
+      "description": "Fast inference for 100+ open models \u2014 Llama, Mistral, Qwen, and more",
+      "pricing": "$0.10-2.50/M tokens depending on model",
+      "free_tier": "$5 free credits",
+      "auth": "TOGETHER_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.together.ai",
+      "models": [
+        "THUDM/GLM-5",
+        "deepseek-ai/DeepSeek-V3.2",
+        "Qwen/Qwen3.5-397B",
+        "moonshotai/Kimi-K2.5"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+    "params": {
+      "name": "Groq",
+      "description": "Fastest inference \u2014 LPU hardware, sub-100ms latency",
+      "pricing": "$0.05-0.80/M tokens (Llama 70B: $0.59/M)",
+      "free_tier": "free tier available",
+      "auth": "GROQ_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://console.groq.com/docs",
+      "models": [
+        "glm-5",
+        "deepseek-v3.2",
+        "kimi-k2.5"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.fireworks.ai/inference/v1/chat/completions",
+    "params": {
+      "name": "Fireworks AI",
+      "description": "Serverless inference with function calling and JSON mode",
+      "pricing": "$0.20-0.90/M tokens",
+      "free_tier": "$1 free credits",
+      "auth": "FIREWORKS_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.fireworks.ai",
+      "models": [
+        "accounts/fireworks/models/glm-5",
+        "accounts/fireworks/models/deepseek-v3"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.deepinfra.com/v1/openai/chat/completions",
+    "params": {
+      "name": "DeepInfra",
+      "description": "Low-cost inference \u2014 optimized for throughput",
+      "pricing": "$0.13-0.65/M tokens",
+      "free_tier": "free tier available",
+      "auth": "DEEPINFRA_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://deepinfra.com/docs"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.cerebras.ai/v1/chat/completions",
+    "params": {
+      "name": "Cerebras",
+      "description": "Wafer-scale engine \u2014 2000+ tokens/sec, fastest output speed",
+      "pricing": "$0.10-0.60/M tokens",
+      "free_tier": "free tier available",
+      "auth": "CEREBRAS_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://inference-docs.cerebras.ai"
+    }
+  },
+  {
+    "type": "compute/inference/serverless",
+    "endpoint": "https://api.vast.ai/v1",
+    "params": {
+      "name": "Vast.ai Serverless",
+      "description": "GPU marketplace with serverless inference \u2014 A100s to consumer GPUs",
+      "pricing": "pay-per-second, varies by GPU ($0.40-2.00/hr)",
+      "auth": "VAST_API_KEY",
+      "docs": "https://docs.vast.ai/serverless",
+      "gpu_types": [
+        "RTX 4090",
+        "A100",
+        "H100",
+        "RTX 3090"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/serverless",
+    "endpoint": "https://api.runpod.ai/v2",
+    "params": {
+      "name": "RunPod Serverless",
+      "description": "Serverless GPU endpoints \u2014 autoscaling, pay-per-second",
+      "pricing": "pay-per-second ($0.59-1.20/hr depending on GPU)",
+      "auth": "RUNPOD_API_KEY",
+      "docs": "https://docs.runpod.io/serverless",
+      "gpu_types": [
+        "A100",
+        "A10G",
+        "RTX 4090"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://llama3-3-70b.lepton.run/api/v1/chat/completions",
+    "params": {
+      "name": "Lepton AI",
+      "description": "Optimized open-model inference with OpenAI-compatible API",
+      "pricing": "$0.40-0.80/M tokens",
+      "free_tier": "$10 free credits",
+      "auth": "LEPTON_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://www.lepton.ai/docs"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.endpoints.anyscale.com/v1/chat/completions",
+    "params": {
+      "name": "Anyscale Endpoints",
+      "description": "Fine-tuning + serving on Ray \u2014 production-grade open model hosting",
+      "pricing": "$0.15-0.50/M tokens",
+      "auth": "ANYSCALE_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.anyscale.com"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.replicate.com/v1/predictions",
+    "params": {
+      "name": "Replicate",
+      "description": "Run any ML model via API \u2014 LLMs, image gen, audio, video",
+      "pricing": "varies by model and hardware",
+      "auth": "REPLICATE_API_TOKEN",
+      "docs": "https://replicate.com/docs"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://api.replicate.com/v1/predictions",
+    "params": {
+      "name": "Replicate (Image)",
+      "description": "FLUX, SDXL, Stable Diffusion via API",
+      "pricing": "~$0.003-0.05 per image",
+      "auth": "REPLICATE_API_TOKEN",
+      "docs": "https://replicate.com/docs"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.perplexity.ai/chat/completions",
+    "params": {
+      "name": "Perplexity API",
+      "description": "Search-augmented LLM \u2014 answers with citations from the web",
+      "pricing": "$0.20-1.00/M tokens",
+      "auth": "PERPLEXITY_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.perplexity.ai"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.mistral.ai/v1/chat/completions",
+    "params": {
+      "name": "Mistral AI",
+      "description": "Official Mistral API \u2014 Mistral Large, Medium, Small, Codestral",
+      "pricing": "$0.15-2.00/M tokens",
+      "free_tier": "free tier for Mistral Small",
+      "auth": "MISTRAL_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.mistral.ai"
+    }
+  }
+]
