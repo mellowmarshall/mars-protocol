@@ -55,6 +55,11 @@ pub struct PeeringConfig {
     /// Maximum descriptors this hub stores (for metadata advertisement).
     #[serde(default = "default_max_descriptors")]
     pub max_descriptors: u64,
+    /// Seed peer addresses for bootstrap (e.g. ["5.161.53.251:4433"]).
+    /// Used to break the chicken-and-egg problem: hubs contact seeds on
+    /// startup to discover each other before gossip can propagate.
+    #[serde(default)]
+    pub seed_peers: Vec<String>,
 }
 
 impl Default for PeeringConfig {
@@ -66,6 +71,7 @@ impl Default for PeeringConfig {
             max_peers: default_max_peers(),
             regions: Vec::new(),
             max_descriptors: default_max_descriptors(),
+            seed_peers: Vec::new(),
         }
     }
 }

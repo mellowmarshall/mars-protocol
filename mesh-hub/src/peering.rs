@@ -8,9 +8,9 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use mesh_core::descriptor::Descriptor;
-use mesh_core::frame::{MSG_PING, MSG_PONG, MSG_STORE};
+use mesh_core::frame::{MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT, MSG_PING, MSG_PONG, MSG_STORE};
 use mesh_core::identity::{Identity, Keypair};
-use mesh_core::message::{NodeAddr, Ping, Pong, Store, from_cbor, to_cbor};
+use mesh_core::message::{FindValue, FindValueResult, NodeAddr, Ping, Pong, Store, from_cbor, to_cbor};
 use mesh_core::Frame;
 use mesh_dht::DescriptorStorage;
 use mesh_schemas::{
@@ -78,7 +78,7 @@ pub struct PeerManager {
     /// Our hub's advertised address.
     pub(crate) hub_addr: NodeAddr,
     /// Connected peer hubs, keyed by DID.
-    peers: HashMap<String, PeerState>,
+    pub(crate) peers: HashMap<String, PeerState>,
     /// Our QUIC endpoint for outgoing connections.
     endpoint: MeshEndpoint,
     /// Hub metadata for self-advertisement.
@@ -508,6 +508,145 @@ pub async fn run_discovery(
                 tracing::debug!(%did, error = %e, "failed to connect to discovered peer");
             }
         }
+    }
+}
+
+/// Bootstrap peering by contacting seed peers directly.
+///
+/// Breaks the chicken-and-egg problem: hubs can't discover peers via
+/// local DHT because peer advertisements only arrive via gossip, which
+/// requires an existing connection. Seed peers are contacted directly
+/// via PING (to verify liveness) and FIND_VALUE (to fetch their hub
+/// advertisements and any other hub ads they know about).
+pub async fn bootstrap_from_seeds(
+    dht_node: &Arc<StdMutex<HubDhtNode>>,
+    peer_manager: &Arc<Mutex<PeerManager>>,
+    seed_addrs: &[String],
+) {
+    if seed_addrs.is_empty() {
+        return;
+    }
+
+    tracing::info!(count = seed_addrs.len(), "bootstrapping peering from seed peers");
+
+    let pm = peer_manager.lock().await;
+    let our_identity = pm.hub_identity.clone();
+    let our_addr = pm.hub_addr.clone();
+    drop(pm);
+
+    for seed_addr_str in seed_addrs {
+        let seed_addr = NodeAddr {
+            protocol: "quic".into(),
+            address: seed_addr_str.clone(),
+        };
+
+        // Step 1: PING the seed to verify it's alive and learn its identity
+        let ping = Ping {
+            sender: our_identity.clone(),
+            sender_addr: our_addr.clone(),
+        };
+        let ping_body = match to_cbor(&ping) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        let ping_frame = Frame::new(MSG_PING, ping_body);
+
+        // We need a temporary connection. Use PeerManager's endpoint.
+        let mut pm = peer_manager.lock().await;
+        let socket_addr = match validate_outbound_addr(seed_addr_str, &pm.outbound_allowlist) {
+            Ok(addr) => addr,
+            Err(e) => {
+                tracing::warn!(addr = %seed_addr_str, error = %e, "seed peer blocked by SSRF");
+                continue;
+            }
+        };
+
+        let connection = match pm.endpoint.connect(socket_addr).await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!(addr = %seed_addr_str, error = %e, "failed to connect to seed peer");
+                continue;
+            }
+        };
+
+        // Send PING
+        let peer_identity = match send_request(&connection, &ping_frame).await {
+            Ok(resp) if resp.msg_type == MSG_PONG => {
+                match from_cbor::<Pong>(&resp.body) {
+                    Ok(pong) => {
+                        tracing::info!(
+                            peer_did = %pong.sender.did(),
+                            addr = %seed_addr_str,
+                            "seed peer alive"
+                        );
+                        Some(pong.sender)
+                    }
+                    Err(_) => None,
+                }
+            }
+            _ => {
+                tracing::warn!(addr = %seed_addr_str, "seed peer did not respond to PING");
+                None
+            }
+        };
+
+        let peer_id = match peer_identity {
+            Some(id) => id,
+            None => continue,
+        };
+
+        // Step 2: Send FIND_VALUE for infrastructure/hub to get hub advertisements
+        let find = FindValue {
+            sender: our_identity.clone(),
+            sender_addr: our_addr.clone(),
+            key: ROUTING_KEY_INFRASTRUCTURE_HUB.clone(),
+            max_results: 50,
+            filters: None,
+        };
+        let find_body = match to_cbor(&find) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        let find_frame = Frame::new(MSG_FIND_VALUE, find_body);
+
+        if let Ok(resp) = send_request(&connection, &find_frame).await {
+            if resp.msg_type == MSG_FIND_VALUE_RESULT {
+                if let Ok(result) = from_cbor::<FindValueResult>(&resp.body) {
+                    if let Some(descriptors) = result.descriptors {
+                        // Store the hub advertisements in our local DHT
+                        let mut node = dht_node.lock().unwrap();
+                        node.store.inner_mut().skip_rate_limit = true;
+                        let mut stored = 0;
+                        for desc in &descriptors {
+                            if node.store.store_descriptor(desc.clone()).is_ok() {
+                                stored += 1;
+                            }
+                        }
+                        node.store.inner_mut().skip_rate_limit = false;
+                        tracing::info!(
+                            stored,
+                            total = descriptors.len(),
+                            addr = %seed_addr_str,
+                            "stored hub advertisements from seed peer"
+                        );
+                    }
+                }
+            }
+        }
+
+        // Step 3: Register the connection as a peer
+        let did = peer_id.did();
+        pm.peers.insert(
+            did.clone(),
+            PeerState {
+                connection: Some(connection),
+                addr: seed_addr.clone(),
+                status: PeerStatus::Connected,
+                last_seen: Instant::now(),
+                consecutive_failures: 0,
+            },
+        );
+        tracing::info!(%did, addr = %seed_addr_str, "seed peer registered");
     }
 }
 

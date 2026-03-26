@@ -36,7 +36,7 @@ use crate::admin::{AdminState, admin_router};
 use crate::config::HubConfig;
 use crate::hooks::HubProtocolHook;
 use crate::metrics::HubMetrics;
-use crate::peering::{HubMetadata, PeerManager};
+use crate::peering::{HubMetadata, PeerManager, PeerStatus};
 use crate::policy::PolicyEngine;
 use crate::rate_limit::HubRateLimiter;
 use crate::storage::CachedStorage;
@@ -144,11 +144,19 @@ impl HubRuntime {
                 }
             });
 
+            // Bootstrap from seed peers (breaks chicken-and-egg)
+            let seed_peers = self.config.peering.seed_peers.clone();
+            if !seed_peers.is_empty() {
+                let pm_boot = pm.clone();
+                let dht_boot = dht.clone();
+                peering::bootstrap_from_seeds(&dht_boot, &pm_boot, &seed_peers).await;
+            }
+
             // Discovery task: run on startup, then every 5 minutes
             let pm_disc = pm.clone();
             let dht_disc = dht.clone();
             tokio::spawn(async move {
-                // Initial discovery
+                // Initial discovery (now has seed peer ads in local storage)
                 peering::run_discovery(&dht_disc, &pm_disc).await;
                 loop {
                     tokio::time::sleep(Duration::from_secs(300)).await;
@@ -222,11 +230,13 @@ impl HubRuntime {
         // Protocol listener
         let dht_node = self.dht_node.clone();
         let hub_metrics = self.metrics.clone();
+        let pm_for_listener = self.peer_manager.clone();
         let listen_future = self.endpoint.listen(move |frame, sender, peer_identity| {
             let dht_node = dht_node.clone();
             let hub_metrics = hub_metrics.clone();
+            let pm = pm_for_listener.clone();
             async move {
-                handle_protocol_request(frame, sender, peer_identity, dht_node, hub_metrics)
+                handle_protocol_request(frame, sender, peer_identity, dht_node, hub_metrics, pm)
                     .await;
             }
         });
@@ -358,10 +368,19 @@ async fn handle_protocol_request(
     peer_identity: Option<Identity>,
     dht_node: Arc<Mutex<HubDhtNode>>,
     hub_metrics: Option<HubMetrics>,
+    peer_manager: Option<Arc<tokio::sync::Mutex<PeerManager>>>,
 ) {
     let start = std::time::Instant::now();
     let msg_type = frame.msg_type;
     let msg_id = frame.msg_id;
+
+    // Pre-check: is the sender a known peer hub? (requires async lock, done before sync lock)
+    let is_peer_hub = if let (Some(pm), Some(pid)) = (&peer_manager, &peer_identity) {
+        let pm = pm.lock().await;
+        pm.peers.get(&pid.did()).is_some_and(|p| p.status == PeerStatus::Connected)
+    } else {
+        false
+    };
 
     let response = {
         let mut node = dht_node.lock().unwrap();
@@ -387,7 +406,21 @@ async fn handle_protocol_request(
                     tracing::warn!(reason, "rejecting STORE");
                     return;
                 }
-                let ack = node.handle_store(&store_req);
+
+                let ack = if is_peer_hub {
+                    // Peer hubs bypass hooks and rate limits — gossip must not be throttled.
+                    // Write directly to storage, skipping pre_store policy checks.
+                    node.store.inner_mut().skip_rate_limit = true;
+                    let result = node.store.store_descriptor(store_req.descriptor.clone());
+                    node.store.inner_mut().skip_rate_limit = false;
+                    mesh_core::message::StoreAck {
+                        stored: result.is_ok(),
+                        reason: result.err().map(|e| e.to_string()),
+                    }
+                } else {
+                    node.handle_store(&store_req)
+                };
+
                 let body = to_cbor(&ack).unwrap();
                 Frame::response(&frame, MSG_STORE_ACK, body)
             }
