@@ -386,6 +386,42 @@ impl DescriptorStorage for RedbStorage {
     }
 }
 
+impl RedbStorage {
+    /// Return all non-expired descriptors in the store (for gossip replication).
+    pub fn all_descriptors(&self) -> Vec<Descriptor> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_micros() as u64;
+
+        let Ok(read_txn) = self.db.begin_read() else {
+            return Vec::new();
+        };
+        let Ok(table) = read_txn.open_table(DESCRIPTORS) else {
+            return Vec::new();
+        };
+
+        let mut descriptors = Vec::new();
+        let Ok(iter) = table.iter() else {
+            return Vec::new();
+        };
+
+        for entry in iter {
+            let Ok((_key, value)) = entry else { continue };
+            let Ok(desc) = from_cbor::<Descriptor>(value.value()) else {
+                continue;
+            };
+            let effective_start = std::cmp::min(desc.timestamp, now);
+            let ttl_micros = u64::from(desc.ttl) * 1_000_000;
+            if effective_start + ttl_micros <= now {
+                continue;
+            }
+            descriptors.push(desc);
+        }
+        descriptors
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

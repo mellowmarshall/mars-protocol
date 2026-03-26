@@ -511,22 +511,26 @@ pub async fn run_discovery(
     }
 }
 
-/// Collect recently stored descriptors for gossip and send to peers.
+/// Collect ALL stored descriptors for gossip and send to peers.
+///
+/// This replicates the full descriptor set across hubs, ensuring every
+/// hub converges to the same catalog. Deduplication is handled by the
+/// receiver via sequence numbers (publisher + schema + topic).
 pub async fn run_gossip_round(
     dht_node: &Arc<StdMutex<HubDhtNode>>,
     peer_manager: &Arc<Mutex<PeerManager>>,
 ) {
-    let routing_key = ROUTING_KEY_INFRASTRUCTURE_HUB.clone();
-
-    // Collect descriptors (short-lived std::sync lock)
+    // Collect all non-expired descriptors (short-lived std::sync lock)
     let descriptors = {
         let node = dht_node.lock().unwrap();
-        node.store.get_descriptors(&routing_key, None)
+        node.store.inner().all_descriptors()
     };
 
     if descriptors.is_empty() {
         return;
     }
+
+    tracing::debug!(count = descriptors.len(), "gossip round: sending descriptors to peers");
 
     let mut pm = peer_manager.lock().await;
     pm.gossip_round(descriptors).await;

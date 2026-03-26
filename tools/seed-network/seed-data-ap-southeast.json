@@ -1,0 +1,255 @@
+[
+  {
+    "type": "compute/database/vector",
+    "endpoint": "https://api.upstash.com/v2/vector",
+    "params": {
+      "name": "Upstash Vector",
+      "description": "Serverless vector database for RAG and semantic search",
+      "free_tier": "10,000 vectors, 1,000 queries/day",
+      "auth": "UPSTASH_TOKEN",
+      "docs": "https://upstash.com/docs/vector"
+    }
+  },
+  {
+    "type": "compute/document/parsing",
+    "endpoint": "https://api.unstructured.io/general/v0/general",
+    "params": {
+      "name": "Unstructured.io",
+      "description": "Parse PDFs, Word docs, HTML into structured data for LLMs",
+      "free_tier": "1,000 pages/month",
+      "auth": "UNSTRUCTURED_API_KEY",
+      "docs": "https://docs.unstructured.io"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://api.together.xyz/v1/images/generations",
+    "params": {
+      "name": "Together AI (FLUX)",
+      "description": "FLUX and Stable Diffusion image generation",
+      "free_tier": "$5 free credits",
+      "auth": "TOGETHER_API_KEY",
+      "docs": "https://docs.together.ai"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://fal.run",
+    "params": {
+      "name": "fal.ai",
+      "description": "Fast image generation \u2014 FLUX, SDXL, ControlNet",
+      "free_tier": "$10 free credits",
+      "auth": "FAL_KEY",
+      "docs": "https://fal.ai/docs"
+    }
+  },
+  {
+    "type": "compute/sandbox/code",
+    "endpoint": "https://api.e2b.dev",
+    "params": {
+      "name": "E2B Code Sandbox",
+      "description": "Cloud sandboxes for AI agents to execute code safely",
+      "free_tier": "100 sandbox hours/month",
+      "auth": "E2B_API_KEY",
+      "docs": "https://e2b.dev/docs",
+      "github": "https://github.com/e2b-dev/e2b"
+    }
+  },
+  {
+    "type": "compute/observability/tracing",
+    "endpoint": "https://api.langfuse.com",
+    "params": {
+      "name": "Langfuse",
+      "description": "Open-source LLM observability \u2014 traces, evals, prompt management",
+      "free_tier": "50K observations/month",
+      "auth": "LANGFUSE_API_KEY",
+      "docs": "https://langfuse.com/docs",
+      "github": "https://github.com/langfuse/langfuse"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.together.xyz/v1/chat/completions",
+    "params": {
+      "name": "Together AI",
+      "description": "Fast inference for 100+ open models \u2014 Llama, Mistral, Qwen, and more",
+      "pricing": "$0.10-2.50/M tokens depending on model",
+      "free_tier": "$5 free credits",
+      "auth": "TOGETHER_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.together.ai",
+      "models": [
+        "THUDM/GLM-5",
+        "deepseek-ai/DeepSeek-V3.2",
+        "Qwen/Qwen3.5-397B",
+        "moonshotai/Kimi-K2.5"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+    "params": {
+      "name": "Groq",
+      "description": "Fastest inference \u2014 LPU hardware, sub-100ms latency",
+      "pricing": "$0.05-0.80/M tokens (Llama 70B: $0.59/M)",
+      "free_tier": "free tier available",
+      "auth": "GROQ_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://console.groq.com/docs",
+      "models": [
+        "glm-5",
+        "deepseek-v3.2",
+        "kimi-k2.5"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.fireworks.ai/inference/v1/chat/completions",
+    "params": {
+      "name": "Fireworks AI",
+      "description": "Serverless inference with function calling and JSON mode",
+      "pricing": "$0.20-0.90/M tokens",
+      "free_tier": "$1 free credits",
+      "auth": "FIREWORKS_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.fireworks.ai",
+      "models": [
+        "accounts/fireworks/models/glm-5",
+        "accounts/fireworks/models/deepseek-v3"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.deepinfra.com/v1/openai/chat/completions",
+    "params": {
+      "name": "DeepInfra",
+      "description": "Low-cost inference \u2014 optimized for throughput",
+      "pricing": "$0.13-0.65/M tokens",
+      "free_tier": "free tier available",
+      "auth": "DEEPINFRA_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://deepinfra.com/docs"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.cerebras.ai/v1/chat/completions",
+    "params": {
+      "name": "Cerebras",
+      "description": "Wafer-scale engine \u2014 2000+ tokens/sec, fastest output speed",
+      "pricing": "$0.10-0.60/M tokens",
+      "free_tier": "free tier available",
+      "auth": "CEREBRAS_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://inference-docs.cerebras.ai"
+    }
+  },
+  {
+    "type": "compute/inference/serverless",
+    "endpoint": "https://api.vast.ai/v1",
+    "params": {
+      "name": "Vast.ai Serverless",
+      "description": "GPU marketplace with serverless inference \u2014 A100s to consumer GPUs",
+      "pricing": "pay-per-second, varies by GPU ($0.40-2.00/hr)",
+      "auth": "VAST_API_KEY",
+      "docs": "https://docs.vast.ai/serverless",
+      "gpu_types": [
+        "RTX 4090",
+        "A100",
+        "H100",
+        "RTX 3090"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/serverless",
+    "endpoint": "https://api.runpod.ai/v2",
+    "params": {
+      "name": "RunPod Serverless",
+      "description": "Serverless GPU endpoints \u2014 autoscaling, pay-per-second",
+      "pricing": "pay-per-second ($0.59-1.20/hr depending on GPU)",
+      "auth": "RUNPOD_API_KEY",
+      "docs": "https://docs.runpod.io/serverless",
+      "gpu_types": [
+        "A100",
+        "A10G",
+        "RTX 4090"
+      ]
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://llama3-3-70b.lepton.run/api/v1/chat/completions",
+    "params": {
+      "name": "Lepton AI",
+      "description": "Optimized open-model inference with OpenAI-compatible API",
+      "pricing": "$0.40-0.80/M tokens",
+      "free_tier": "$10 free credits",
+      "auth": "LEPTON_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://www.lepton.ai/docs"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.endpoints.anyscale.com/v1/chat/completions",
+    "params": {
+      "name": "Anyscale Endpoints",
+      "description": "Fine-tuning + serving on Ray \u2014 production-grade open model hosting",
+      "pricing": "$0.15-0.50/M tokens",
+      "auth": "ANYSCALE_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.anyscale.com"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.replicate.com/v1/predictions",
+    "params": {
+      "name": "Replicate",
+      "description": "Run any ML model via API \u2014 LLMs, image gen, audio, video",
+      "pricing": "varies by model and hardware",
+      "auth": "REPLICATE_API_TOKEN",
+      "docs": "https://replicate.com/docs"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://api.replicate.com/v1/predictions",
+    "params": {
+      "name": "Replicate (Image)",
+      "description": "FLUX, SDXL, Stable Diffusion via API",
+      "pricing": "~$0.003-0.05 per image",
+      "auth": "REPLICATE_API_TOKEN",
+      "docs": "https://replicate.com/docs"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.perplexity.ai/chat/completions",
+    "params": {
+      "name": "Perplexity API",
+      "description": "Search-augmented LLM \u2014 answers with citations from the web",
+      "pricing": "$0.20-1.00/M tokens",
+      "auth": "PERPLEXITY_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.perplexity.ai"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.mistral.ai/v1/chat/completions",
+    "params": {
+      "name": "Mistral AI",
+      "description": "Official Mistral API \u2014 Mistral Large, Medium, Small, Codestral",
+      "pricing": "$0.15-2.00/M tokens",
+      "free_tier": "free tier for Mistral Small",
+      "auth": "MISTRAL_API_KEY",
+      "openai_compatible": true,
+      "docs": "https://docs.mistral.ai"
+    }
+  }
+]

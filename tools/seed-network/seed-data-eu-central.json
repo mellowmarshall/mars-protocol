@@ -1,0 +1,215 @@
+[
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/Qwen/Qwen3.5-397B-A17B",
+    "params": {
+      "name": "Qwen3.5 397B (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "Qwen/Qwen3.5-397B-A17B",
+      "description": "Qwen3.5 \u2014 397B total / 17B active MoE, multilingual, Apache 2.0"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/moonshotai/Kimi-K2.5",
+    "params": {
+      "name": "Kimi K2.5 (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "moonshotai/Kimi-K2.5",
+      "description": "Kimi K2.5 \u2014 #2 open-weight model, reasoning, Moonshot AI"
+    }
+  },
+  {
+    "type": "compute/inference/reasoning",
+    "endpoint": "https://api-inference.huggingface.co/models/deepseek-ai/DeepSeek-R1",
+    "params": {
+      "name": "DeepSeek R1 (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "deepseek-ai/DeepSeek-R1",
+      "description": "DeepSeek R1 \u2014 chain-of-thought reasoning, competitive with o3"
+    }
+  },
+  {
+    "type": "compute/inference/code-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/Qwen/Qwen3-Coder-Next",
+    "params": {
+      "name": "Qwen3 Coder (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "Qwen/Qwen3-Coder-Next",
+      "description": "Qwen3 Coder \u2014 optimized for agentic coding workflows"
+    }
+  },
+  {
+    "type": "compute/inference/embeddings",
+    "endpoint": "https://api-inference.huggingface.co/models/BAAI/bge-large-en-v1.5",
+    "params": {
+      "name": "BGE Large Embeddings (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "BAAI/bge-large-en-v1.5",
+      "description": "State-of-the-art text embeddings for RAG and semantic search"
+    }
+  },
+  {
+    "type": "compute/inference/image-generation",
+    "endpoint": "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev",
+    "params": {
+      "name": "FLUX.1 Dev (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "black-forest-labs/FLUX.1-dev",
+      "description": "FLUX.1 \u2014 state-of-the-art image generation from Black Forest Labs"
+    }
+  },
+  {
+    "type": "compute/inference/speech-to-text",
+    "endpoint": "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo",
+    "params": {
+      "name": "Whisper Large v3 Turbo (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "openai/whisper-large-v3-turbo",
+      "description": "Whisper v3 Turbo \u2014 fast, accurate speech recognition"
+    }
+  },
+  {
+    "type": "compute/inference/translation",
+    "endpoint": "https://api-inference.huggingface.co/models/facebook/nllb-200-distilled-600M",
+    "params": {
+      "name": "NLLB Translation (HuggingFace)",
+      "provider": "huggingface",
+      "auth": "HF_TOKEN",
+      "model": "facebook/nllb-200-distilled-600M",
+      "description": "No Language Left Behind \u2014 200+ language translation"
+    }
+  },
+  {
+    "type": "data/search/ai",
+    "endpoint": "https://api.tavily.com/search",
+    "params": {
+      "name": "Tavily",
+      "description": "AI-optimized web search \u2014 aggregates 20 sources, scores and ranks for relevance",
+      "free_tier": "1,000 credits/month",
+      "auth": "TAVILY_API_KEY",
+      "docs": "https://docs.tavily.com",
+      "github": "https://github.com/tavily-ai/tavily-python"
+    }
+  },
+  {
+    "type": "data/search/ai",
+    "endpoint": "https://api.exa.ai/search",
+    "params": {
+      "name": "Exa",
+      "description": "Neural search engine with embeddings-powered next-link prediction",
+      "free_tier": "1,000 credits",
+      "auth": "EXA_API_KEY",
+      "docs": "https://docs.exa.ai",
+      "github": "https://github.com/exa-labs/exa-py"
+    }
+  },
+  {
+    "type": "data/search/serp",
+    "endpoint": "https://google.serper.dev/search",
+    "params": {
+      "name": "Serper",
+      "description": "Google SERP API \u2014 search, images, news, maps, shopping, scholar",
+      "free_tier": "2,500 queries free, no card required",
+      "auth": "SERPER_API_KEY",
+      "docs": "https://serper.dev/docs"
+    }
+  },
+  {
+    "type": "data/search/web",
+    "endpoint": "https://api.search.brave.com/res/v1/web/search",
+    "params": {
+      "name": "Brave Search API",
+      "description": "Independent web search with AI snippets",
+      "free_tier": "2,000 queries/month",
+      "auth": "BRAVE_API_KEY",
+      "docs": "https://brave.com/search/api/"
+    }
+  },
+  {
+    "type": "data/scraping/web",
+    "endpoint": "https://api.firecrawl.dev/v1/scrape",
+    "params": {
+      "name": "Firecrawl",
+      "description": "Web scraping API \u2014 turns websites into LLM-ready data",
+      "free_tier": "500 credits/month, no card required",
+      "auth": "FIRECRAWL_API_KEY",
+      "docs": "https://docs.firecrawl.dev",
+      "github": "https://github.com/mendableai/firecrawl"
+    }
+  },
+  {
+    "type": "data/scraping/web",
+    "endpoint": "https://api.apify.com/v2",
+    "params": {
+      "name": "Apify",
+      "description": "Web scraping platform with 1,600+ ready-made scrapers",
+      "free_tier": "$5/month free",
+      "auth": "APIFY_TOKEN",
+      "docs": "https://docs.apify.com/api/v2"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://api.puter.com/ai/chat",
+    "params": {
+      "name": "Puter.js (Free GPT)",
+      "description": "Free GPT access \u2014 no API key required, runs from frontend",
+      "free_tier": "unlimited",
+      "auth": "none",
+      "docs": "https://developer.puter.com"
+    }
+  },
+  {
+    "type": "compute/inference/text-generation",
+    "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+    "params": {
+      "name": "OpenRouter",
+      "description": "API aggregator \u2014 hundreds of free and paid LLMs through one endpoint",
+      "free_tier": "$5 free credits for new users",
+      "auth": "OPENROUTER_API_KEY",
+      "docs": "https://openrouter.ai/docs"
+    }
+  },
+  {
+    "type": "compute/messaging/email",
+    "endpoint": "https://api.resend.com/emails",
+    "params": {
+      "name": "Resend",
+      "description": "Developer-first email API",
+      "free_tier": "3,000 emails/month, 100/day",
+      "auth": "RESEND_API_KEY",
+      "docs": "https://resend.com/docs",
+      "github": "https://github.com/resend/resend-python"
+    }
+  },
+  {
+    "type": "compute/database/postgres",
+    "endpoint": "https://console.neon.tech",
+    "params": {
+      "name": "Neon Serverless Postgres",
+      "description": "Serverless Postgres with branching \u2014 agents can spin up databases",
+      "free_tier": "0.5 GB storage, always free",
+      "auth": "NEON_API_KEY",
+      "docs": "https://neon.tech/docs"
+    }
+  },
+  {
+    "type": "compute/database/redis",
+    "endpoint": "https://api.upstash.com",
+    "params": {
+      "name": "Upstash Redis",
+      "description": "Serverless Redis \u2014 agent memory, caching, rate limiting",
+      "free_tier": "10,000 commands/day",
+      "auth": "UPSTASH_TOKEN",
+      "docs": "https://upstash.com/docs/redis"
+    }
+  }
+]
