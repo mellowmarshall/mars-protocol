@@ -42,6 +42,8 @@ export interface HealthStatus {
 export interface PublishOptions {
   endpoint: string;
   params?: Record<string, unknown>;
+  /** TTL in seconds (60-86400). Defaults to 3600 (1 hour). */
+  ttl?: number;
 }
 
 export class MeshError extends Error {
@@ -89,6 +91,7 @@ export class MeshClient {
       type: capabilityType,
       endpoint: options.endpoint,
       ...(options.params !== undefined && { params: options.params }),
+      ...(options.ttl !== undefined && { ttl: options.ttl }),
     };
 
     const response = await this.fetch("/v1/publish", {

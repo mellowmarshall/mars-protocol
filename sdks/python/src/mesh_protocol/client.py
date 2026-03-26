@@ -181,6 +181,7 @@ class MeshClient:
         capability_type: str,
         endpoint: str,
         params: Optional[dict[str, Any]] = None,
+        ttl: Optional[int] = None,
     ) -> PublishResult:
         """Publish a capability descriptor to the mesh network.
 
@@ -188,6 +189,7 @@ class MeshClient:
             capability_type: Hierarchical type string (e.g. ``"compute/inference/text-generation"``).
             endpoint: URL where the capability is served.
             params: Optional metadata attached to the descriptor.
+            ttl: Optional TTL in seconds (60-86400). Defaults to 3600 (1 hour).
 
         Returns:
             A :class:`PublishResult` with the assigned descriptor id.
@@ -198,6 +200,8 @@ class MeshClient:
         body: dict[str, Any] = {"type": capability_type, "endpoint": endpoint}
         if params is not None:
             body["params"] = params
+        if ttl is not None:
+            body["ttl"] = ttl
         response = self._client.post("/v1/publish", json=body)
         _raise_for_error(response)
         data = response.json()

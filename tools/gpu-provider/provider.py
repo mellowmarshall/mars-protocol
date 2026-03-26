@@ -410,13 +410,16 @@ def build_descriptors(
     return descriptors
 
 
-def publish_descriptors(gateway_url: str, descriptors: list[dict[str, Any]]) -> list[str]:
+def publish_descriptors(gateway_url: str, descriptors: list[dict[str, Any]], ttl: int | None = None) -> list[str]:
     """Publish descriptors to the mesh."""
     client = httpx.Client(base_url=gateway_url, timeout=30)
     ids = []
     for i, desc in enumerate(descriptors):
+        body = dict(desc)
+        if ttl is not None:
+            body["ttl"] = ttl
         try:
-            r = client.post("/v1/publish", json=desc)
+            r = client.post("/v1/publish", json=body)
             r.raise_for_status()
             did = r.json().get("descriptor_id", "unknown")
             log.info("Published: %s → %s", desc["params"]["name"], did)
@@ -936,6 +939,13 @@ def main() -> None:
     refresh = config.get("refresh_secs", 1800)
     price = config.get("price_per_mtok", 0.0)
 
+    # Service mode: use 24h TTL with 6h refresh for maximum resilience.
+    # Provider survives up to 18 hours of downtime (crash + slow recovery).
+    ttl = None  # default: gateway uses 3600
+    if args.service:
+        ttl = 86400       # 24 hours
+        refresh = 21600   # 6 hours
+
     if args.service:
         log.info(
             "Starting: GPU=%s, models=%d, endpoint=%s, price=%s, gateway=%s",
@@ -964,7 +974,7 @@ def main() -> None:
         print()
 
     while True:
-        ids = publish_descriptors(gateway, descriptors)
+        ids = publish_descriptors(gateway, descriptors, ttl=ttl)
         log.info("Published %d/%d. Next refresh in %ds.", len(ids), len(descriptors), refresh)
         try:
             time.sleep(refresh)
