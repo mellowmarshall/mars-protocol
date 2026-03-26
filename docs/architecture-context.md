@@ -60,3 +60,38 @@ load/capacity, decimal strings for monetary amounts.
 **Rationale:** CBOR permits multiple float encodings (half/single/double precision)
 for the same value. Different implementations could produce different bytes, causing
 different descriptor content hashes. Integer encoding is unambiguous.
+
+---
+
+## ADR-004: Iterative STORE as Primary Replication (Not Gossip)
+
+**Date:** 2026-03-26
+**Status:** Accepted
+
+**Context:** Block 1 introduced hub-to-hub gossip for descriptor replication.
+This created persistent QUIC connections between hubs with a push-based gossip
+protocol. In practice, this led to cascading complexity: peer discovery
+chicken-and-egg, rate limit bypass for peer traffic, one-directional connection
+registration, and the network still didn't converge because gossip traffic was
+being rate-limited by the very hooks designed to protect against abuse.
+
+Standard Kademlia (BitTorrent BEP 5, libp2p Kademlia spec) solves replication
+differently: the publisher sends STORE to the K closest nodes to the routing
+key. Every message exchange updates routing tables automatically. No persistent
+connections, no gossip protocol, no special peer tier.
+
+**Decision:** Use standard Kademlia iterative STORE as the primary replication
+mechanism. Keep hub gossip as a secondary consistency layer for hub metadata.
+
+- `DhtNode::iterative_store()` finds K closest nodes to the key and sends
+  STORE to all of them (mirrors `lookup_value` but writes instead of reads)
+- Publisher re-publishes periodically (TTL-based) to keep data alive
+- Every incoming message updates the sender in the routing table
+- Gossip remains for `infrastructure/hub` advertisements only
+
+**Rationale:**
+- Proven at scale: BitTorrent DHT handles billions of lookups/day with this model
+- Self-healing: new nodes discover data via normal FIND_VALUE lookups
+- No persistent connections needed between hubs
+- Publisher controls their own data lifecycle via re-publish interval
+- Eliminates gossip rate-limit bypass, peer bootstrap, and connection tracking complexity

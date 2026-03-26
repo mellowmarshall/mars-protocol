@@ -36,7 +36,7 @@ use crate::admin::{AdminState, admin_router};
 use crate::config::HubConfig;
 use crate::hooks::HubProtocolHook;
 use crate::metrics::HubMetrics;
-use crate::peering::{HubMetadata, PeerManager, PeerStatus};
+use crate::peering::{HubMetadata, PeerManager, PeerState, PeerStatus};
 use crate::policy::PolicyEngine;
 use crate::rate_limit::HubRateLimiter;
 use crate::storage::CachedStorage;
@@ -375,9 +375,39 @@ async fn handle_protocol_request(
     let msg_id = frame.msg_id;
 
     // Pre-check: is the sender a known peer hub? (requires async lock, done before sync lock)
+    // Also auto-register incoming connections from hub identities as peers.
     let is_peer_hub = if let (Some(pm), Some(pid)) = (&peer_manager, &peer_identity) {
-        let pm = pm.lock().await;
-        pm.peers.get(&pid.did()).is_some_and(|p| p.status == PeerStatus::Connected)
+        let mut pm = pm.lock().await;
+        if pm.peers.get(&pid.did()).is_some_and(|p| p.status == PeerStatus::Connected) {
+            true
+        } else {
+            // Check if this identity has a hub advertisement in our storage —
+            // if so, they're a peer hub connecting to us. Register them.
+            let has_hub_ad = {
+                let node = dht_node.lock().unwrap();
+                let hub_descs = node.store.get_descriptors(
+                    &mesh_schemas::ROUTING_KEY_INFRASTRUCTURE_HUB,
+                    None,
+                );
+                hub_descs.iter().any(|d| d.publisher.did() == pid.did())
+            };
+            if has_hub_ad {
+                let did = pid.did();
+                if !pm.peers.contains_key(&did) {
+                    tracing::info!(%did, "auto-registered incoming peer hub");
+                    pm.peers.insert(did, PeerState {
+                        connection: None, // incoming — we don't own the connection
+                        addr: NodeAddr { protocol: "quic".into(), address: "incoming".into() },
+                        status: PeerStatus::Connected,
+                        last_seen: std::time::Instant::now(),
+                        consecutive_failures: 0,
+                    });
+                }
+                true
+            } else {
+                false
+            }
+        }
     } else {
         false
     };

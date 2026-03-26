@@ -56,7 +56,7 @@ pub enum PeerStatus {
 }
 
 /// State for a single peer hub.
-pub struct PeerState {
+pub(crate) struct PeerState {
     /// Active QUIC connection (if connected).
     pub connection: Option<mesh_transport::MeshConnection>,
     /// The peer's network address.

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use mesh_core::frame::{
     MSG_FIND_NODE, MSG_FIND_NODE_RESULT, MSG_FIND_VALUE, MSG_FIND_VALUE_RESULT, MSG_PING, MSG_PONG,
+    MSG_STORE, MSG_STORE_ACK,
 };
 use mesh_core::identity::{Identity, Keypair};
 use mesh_core::message::{
@@ -401,6 +402,98 @@ impl<S: DescriptorStorage> DhtNode<S> {
         }
 
         Ok(collected_descriptors)
+    }
+
+    /// Perform an iterative Kademlia STORE — replicate a descriptor to the
+    /// K closest nodes to each of its routing keys.
+    ///
+    /// This is the standard Kademlia replication mechanism (BEP 5, Section 2.3
+    /// of the original paper). The publisher finds the K closest nodes to the
+    /// key and sends STORE to all of them, ensuring the data is distributed
+    /// across the network without requiring a separate gossip layer.
+    pub async fn iterative_store<T: Transport>(
+        &mut self,
+        descriptor: Descriptor,
+        transport: &T,
+    ) -> Result<usize, TransportError> {
+        let mut total_stored = 0;
+
+        // For each routing key, find K closest nodes and STORE
+        for routing_key in &descriptor.routing_keys {
+            // Find closest nodes using iterative FIND_NODE
+            let closest = self.routing_table.closest_nodes(routing_key, K);
+
+            // Also try nodes discovered via a quick FIND_NODE round
+            let mut targets = closest;
+            let initial_query: Vec<NodeInfo> = targets.iter().take(self.config.alpha).cloned().collect();
+
+            for node in &initial_query {
+                let find_node = FindNode {
+                    sender: self.identity.clone(),
+                    sender_addr: self.addr.clone(),
+                    target: routing_key.clone(),
+                };
+                let body = to_cbor(&find_node)
+                    .map_err(|e| TransportError::FrameError(e.to_string()))?;
+                let frame = Frame::new(MSG_FIND_NODE, body);
+
+                if let Ok(resp) = transport.send_request(&node.addr, frame).await {
+                    if resp.msg_type == MSG_FIND_NODE_RESULT {
+                        if let Ok(result) = from_cbor::<FindNodeResult>(&resp.body) {
+                            for n in result.nodes {
+                                let _ = self.routing_table.add_node(n.clone());
+                                if !targets.iter().any(|t| t.identity.node_id() == n.identity.node_id()) {
+                                    targets.push(n);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Sort by distance to routing key, take K closest
+            targets.sort_by(|a, b| {
+                let id_a = a.identity.node_id();
+                let id_b = b.identity.node_id();
+                distance_cmp(routing_key, &id_a, &id_b)
+            });
+            targets.truncate(K);
+
+            // Send STORE to each of the K closest nodes
+            let store = Store {
+                sender: self.identity.clone(),
+                sender_addr: self.addr.clone(),
+                descriptor: descriptor.clone(),
+            };
+            let store_body = to_cbor(&store)
+                .map_err(|e| TransportError::FrameError(e.to_string()))?;
+
+            for node in &targets {
+                // Don't store to ourselves
+                if node.identity.node_id() == self.node_id {
+                    continue;
+                }
+
+                let frame = Frame::new(MSG_STORE, store_body.clone());
+                match transport.send_request(&node.addr, frame).await {
+                    Ok(resp) if resp.msg_type == MSG_STORE_ACK => {
+                        if let Ok(ack) = from_cbor::<StoreAck>(&resp.body) {
+                            if ack.stored {
+                                total_stored += 1;
+                            }
+                        }
+                    }
+                    _ => {
+                        // Node unreachable — skip
+                    }
+                }
+            }
+        }
+
+        // Also store locally
+        let _ = self.store.store_descriptor(descriptor);
+
+        Ok(total_stored)
     }
 
     /// Bootstrap this node by connecting to seed addresses.

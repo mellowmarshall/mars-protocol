@@ -57,14 +57,32 @@ impl MeshClient {
             .map_err(ClientError::Transport)
     }
 
-    /// Publish a descriptor to the mesh via a target node.
+    /// Publish a descriptor to the mesh using iterative Kademlia STORE.
     ///
-    /// Sends a STORE request to the given target address.
+    /// Finds the K closest nodes to the descriptor's routing keys and sends
+    /// STORE to all of them. This is the standard Kademlia replication
+    /// mechanism — no gossip needed.
+    ///
+    /// Falls back to direct STORE to the target if the routing table is empty.
     pub async fn publish(
         &mut self,
         descriptor: Descriptor,
         target: &NodeAddr,
     ) -> Result<StoreAck, ClientError> {
+        // Try iterative store first (Kademlia replication)
+        let stored = self.node
+            .iterative_store(descriptor.clone(), &self.transport)
+            .await
+            .map_err(ClientError::Transport)?;
+
+        if stored > 0 {
+            return Ok(StoreAck {
+                stored: true,
+                reason: None,
+            });
+        }
+
+        // Fallback: direct STORE to target (small network / empty routing table)
         let store = Store {
             sender: self.node.keypair().identity(),
             sender_addr: self.node.addr().clone(),
