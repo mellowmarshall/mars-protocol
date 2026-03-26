@@ -20,7 +20,7 @@ Turn your gaming PC into a passive income machine. Share your GPU on the MARS me
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.3    # or any model that fits your VRAM
+ollama pull llama4    # or any model that fits your VRAM
 ```
 
 ### 2. Create a Stripe account

@@ -73,7 +73,7 @@ try:
         print(f"  \033[0;90m  ... and {len(data) - 6} more\033[0m")
     pause(1.5)
 except Exception:
-    print("  \033[0;33mcompute/inference/text-generation\033[0m         Llama 3.3 70B")
+    print("  \033[0;33mcompute/inference/text-generation\033[0m         Llama 4 Scout")
     print("  \033[0;33mcompute/inference/image-generation\033[0m        SDXL")
     pause(1.5)
 

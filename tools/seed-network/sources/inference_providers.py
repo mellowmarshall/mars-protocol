@@ -13,7 +13,7 @@ INFERENCE_PROVIDERS = [
             "auth": "TOGETHER_API_KEY",
             "openai_compatible": True,
             "docs": "https://docs.together.ai",
-            "models": ["meta-llama/Llama-3.3-70B", "mistralai/Mixtral-8x22B", "Qwen/Qwen2.5-72B"],
+            "models": ["meta-llama/Llama-4-Scout", "deepseek-ai/DeepSeek-V3", "Qwen/Qwen3-235B", "mistralai/Mistral-Large-3"],
         },
     },
     # ── Groq ──────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ INFERENCE_PROVIDERS = [
             "auth": "GROQ_API_KEY",
             "openai_compatible": True,
             "docs": "https://console.groq.com/docs",
-            "models": ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"],
+            "models": ["llama-4-scout-17b", "deepseek-r1-distill-llama-70b", "qwen-qwq-32b"],
         },
     },
     # ── Fireworks ─────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ INFERENCE_PROVIDERS = [
             "auth": "FIREWORKS_API_KEY",
             "openai_compatible": True,
             "docs": "https://docs.fireworks.ai",
-            "models": ["accounts/fireworks/models/llama-v3p3-70b-instruct", "accounts/fireworks/models/mixtral-8x22b-instruct"],
+            "models": ["accounts/fireworks/models/llama4-scout-instruct", "accounts/fireworks/models/deepseek-v3"],
         },
     },
     # ── DeepInfra ─────────────────────────────────────────────────────────

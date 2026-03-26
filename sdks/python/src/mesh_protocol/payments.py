@@ -18,7 +18,7 @@ Usage:
     charge = payments.charge_inference(
         provider_stripe_account="acct_xxx",
         amount_cents=15,  # $0.15
-        description="Llama 3.3 70B — 1.5K tokens",
+        description="Llama 4 Scout — 1.5K tokens",
         consumer_payment_method="pm_xxx",
     )
 """

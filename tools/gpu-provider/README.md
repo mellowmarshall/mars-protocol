@@ -13,7 +13,7 @@ Turn any machine with a GPU into a mesh inference provider in one command.
 ```bash
 # Install Ollama (if you haven't already)
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.3
+ollama pull llama4
 
 # Start a local gateway connected to the MARS network
 ./mesh-gateway --seed 5.161.53.251:4433 --listen 127.0.0.1:3000 &
@@ -26,7 +26,7 @@ python provider.py --gateway http://localhost:3000 --region us-east
 That's it. The provider agent:
 
 1. **Detects your GPU** (NVIDIA via nvidia-smi, AMD via rocm-smi)
-2. **Lists installed Ollama models** (llama3.3, mistral, codellama, etc.)
+2. **Lists installed Ollama models** (llama4, mistral, codellama, etc.)
 3. **Publishes each model** as a mesh descriptor with hardware specs
 4. **Re-publishes every 30 minutes** to keep listings alive
 
@@ -38,11 +38,11 @@ For each model on your GPU, a descriptor like this goes on the mesh:
 type:     compute/inference/text-generation
 endpoint: http://localhost:11434
 params:
-  name:              "llama3.3:latest (NVIDIA GeForce RTX 3090)"
-  model:             "llama3.3:latest"
+  name:              "llama4:latest (NVIDIA GeForce RTX 3090)"
+  model:             "llama4:latest"
   gpu:               "NVIDIA GeForce RTX 3090"
   vram_mb:           24576
-  price_per_1k_tokens: 0.00
+  price_per_mtok: 0.00
   region:            "us-east"
   ollama_api:        "http://localhost:11434/api/generate"
   openai_compat:     "http://localhost:11434/v1/chat/completions"

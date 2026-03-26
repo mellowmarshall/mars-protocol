@@ -443,7 +443,7 @@ def main() -> None:
         print()
         print("  Install Ollama:  curl -fsSL https://ollama.com/install.sh | sh")
         print("  Start Ollama:    ollama serve")
-        print("  Pull a model:    ollama pull llama3.3")
+        print("  Pull a model:    ollama pull llama4")
         print()
         sys.exit(1)
 

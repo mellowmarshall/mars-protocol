@@ -36,7 +36,7 @@ Discover services on the mesh by capability type.
 
 ```
 mars_discover(type: "compute/inference")
-→ Found 8 services: Llama 3.3 70B, Mistral 7B, SDXL, Whisper, ...
+→ Found 8 services: Llama 4 Scout, DeepSeek V3, Qwen3, FLUX.1, ...
 
 mars_discover(type: "data/search")
 → Found 4 services: Tavily, Exa, DuckDuckGo, Brave Search

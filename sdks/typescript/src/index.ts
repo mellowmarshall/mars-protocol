@@ -9,7 +9,7 @@
  * const client = new MeshClient("http://localhost:3000");
  * await client.publish("compute/inference/text-generation", {
  *   endpoint: "https://my-agent.example.com/v1/generate",
- *   params: { model: "llama-3.3-70b" },
+ *   params: { model: "llama-4-scout" },
  * });
  * const results = await client.discover("compute/inference");
  * ```

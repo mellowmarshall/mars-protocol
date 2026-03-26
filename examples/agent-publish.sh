@@ -30,7 +30,7 @@ echo "Publishing text-generation capability..."
 mesh-node publish \
     --type "compute/inference/text-generation" \
     --endpoint "https://my-agent.example.com/v1/generate" \
-    --params '{"model":"llama-3.3-70b","max_tokens":4096,"formats":["text","json"]}' \
+    --params '{"model":"llama-4-scout","max_tokens":4096,"formats":["text","json"]}' \
     --seed "$SEED_ADDR" \
     --identity "$IDENTITY"
 
