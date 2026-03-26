@@ -14,6 +14,7 @@ from sources.public_apis import PUBLIC_APIS
 from sources.mcp_skills import MCP_SKILLS
 from sources.llm_endpoints import LLM_ENDPOINTS
 from sources.startups import STARTUP_APIS
+from sources.inference_providers import INFERENCE_PROVIDERS
 
 
 def publish_descriptor(
@@ -132,6 +133,7 @@ def main() -> None:
         ("MCP Skills", MCP_SKILLS),
         ("LLM Endpoints", LLM_ENDPOINTS),
         ("Startup APIs", STARTUP_APIS),
+        ("Inference Providers", INFERENCE_PROVIDERS),
     ]
 
     total_published = 0

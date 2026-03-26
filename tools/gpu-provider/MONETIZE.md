@@ -67,17 +67,17 @@ curl http://localhost:3000/v1/provider/status
 
 The provider agent calculates pricing based on your GPU's actual throughput and electricity costs:
 
-- **Break-even** — your real cost per 1K tokens (electricity/rental only)
+- **Break-even** — your real cost per M tokens (electricity/rental only)
 - **2-3x break-even** — competitive, good volume
 - **5x break-even** — premium, lower volume but higher margin
 - **$0.00** — free tier to build reputation (recommended for first week)
 
 For reference, cloud API pricing:
-- OpenAI GPT-4o: $0.005/1K tokens
-- Together AI Llama 70B: $0.0009/1K tokens
-- Groq Llama 70B: $0.0006/1K tokens
+- OpenAI GPT-4o: $0.005/M tokens
+- Together AI Llama 70B: $0.0009/M tokens
+- Groq Llama 70B: $0.0006/M tokens
 
-Your break-even on a consumer GPU is typically $0.0007-0.0015/1K tokens — well below cloud APIs. Even at 3x margin you're undercutting everyone.
+Your break-even on a consumer GPU is typically $0.0007-0.0015/M tokens — well below cloud APIs. Even at 3x margin you're undercutting everyone.
 
 ## Requirements
 

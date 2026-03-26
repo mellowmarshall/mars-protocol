@@ -172,11 +172,14 @@ class MeshPayments:
 
     def estimate_cost(
         self,
-        price_per_1k_tokens: float,
+        price_per_mtok: float,
         estimated_tokens: int,
     ) -> dict[str, int]:
-        """Estimate the cost of an inference request in cents."""
-        total_cents = int(price_per_1k_tokens * estimated_tokens / 1000 * 100)
+        """Estimate the cost of an inference request in cents.
+
+        price_per_mtok is in USD per million tokens (e.g. 2.50 = $2.50/M tokens).
+        """
+        total_cents = int(price_per_mtok * estimated_tokens / 1_000_000 * 100)
         platform_fee = max(1, total_cents * PLATFORM_FEE_PERCENT // 100)
         return {
             "total_cents": total_cents,

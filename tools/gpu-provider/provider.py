@@ -154,13 +154,13 @@ def suggest_price(gpu_name: str) -> dict[str, float] | None:
         return None
 
     tokens_per_hr = bench["tok_per_sec"] * 3600
-    cost_per_1k = (bench["cost_per_hr"] / tokens_per_hr) * 1000
+    cost_per_mtok = (bench["cost_per_hr"] / tokens_per_hr) * 1_000_000
 
     return {
-        "breakeven": round(cost_per_1k, 6),
-        "min": round(cost_per_1k * 2, 6),      # 2x margin (floor)
-        "max": round(cost_per_1k * 5, 6),      # 5x margin (ceiling)
-        "suggested": round(cost_per_1k * 3, 6), # 3x margin (default)
+        "breakeven": round(cost_per_mtok, 2),
+        "min": round(cost_per_mtok * 2, 2),      # 2x margin (floor)
+        "max": round(cost_per_mtok * 5, 2),      # 5x margin (ceiling)
+        "suggested": round(cost_per_mtok * 3, 2), # 3x margin (default)
         "tok_per_sec": bench["tok_per_sec"],
         "cost_per_hr": bench["cost_per_hr"],
     }
@@ -255,19 +255,20 @@ def interactive_setup(
         if pricing:
             print(f"  Estimated throughput: ~{pricing['tok_per_sec']:.0f} tokens/sec")
             print(f"  Your electricity cost: ~${pricing['cost_per_hr']:.2f}/hr")
-            print(f"  Break-even price: ${pricing['breakeven']:.4f}/1K tokens")
-            print(f"  Suggested range:  ${pricing['min']:.4f} - ${pricing['max']:.4f}/1K tokens")
+            print(f"  Break-even price: ${pricing['breakeven']:.2f}/M tokens")
+            print(f"  Suggested range:  ${pricing['min']:.2f} - ${pricing['max']:.2f}/M tokens")
             print()
-            print(f"  For comparison:")
-            print(f"    OpenAI GPT-4o:       $0.0050/1K tokens")
-            print(f"    Together AI Llama:   $0.0009/1K tokens")
-            print(f"    Your break-even:     ${pricing['breakeven']:.4f}/1K tokens")
+            print(f"  For comparison (per million tokens):")
+            print(f"    OpenAI GPT-4o:       $5.00/M tokens")
+            print(f"    Together AI Llama:   $0.88/M tokens")
+            print(f"    Groq Llama 70B:      $0.59/M tokens")
+            print(f"    Your break-even:     ${pricing['breakeven']:.2f}/M tokens")
             default_price = pricing["suggested"]
         else:
             print("  Could not auto-detect pricing for your GPU.")
-            print("  Typical range: $0.001-0.010/1K tokens")
-            default_price = 0.003
-        price = prompt_float("Price per 1K tokens (USD)", default_price)
+            print("  Typical range: $0.50-5.00/M tokens")
+            default_price = 2.0
+        price = prompt_float("Price per million tokens (USD)", default_price)
         print()
 
         # Stripe
@@ -327,7 +328,7 @@ def interactive_setup(
     config = {
         "gateway": gateway,
         "ollama_url": ollama_url,
-        "price_per_1k_tokens": price,
+        "price_per_mtok": price,
         "stripe_account": stripe_account,
         "region": region,
         "models": selected,
@@ -355,7 +356,7 @@ def build_descriptors(
 ) -> list[dict[str, Any]]:
     """Build mesh descriptors from config."""
     descriptors = []
-    price = config.get("price_per_1k_tokens", 0.0)
+    price = config.get("price_per_mtok", 0.0)
     region = config.get("region", "unknown")
     stripe = config.get("stripe_account", "")
 
@@ -383,14 +384,14 @@ def build_descriptors(
         }
 
         if price > 0:
-            params["price_per_1k_tokens"] = price
+            params["price_per_mtok"] = price
             params["currency"] = "USD"
             params["accepts_payment"] = True
             if stripe:
                 params["stripe_account"] = stripe
                 params["payment_methods"] = ["stripe"]
         else:
-            params["price_per_1k_tokens"] = 0.0
+            params["price_per_mtok"] = 0.0
             params["accepts_payment"] = False
 
         descriptors.append({"type": cap_type, "endpoint": endpoint, "params": params})
@@ -481,7 +482,7 @@ def main() -> None:
     descriptors = build_descriptors(gpu, selected_models, endpoint, config)
     gateway = config.get("gateway", "http://localhost:3000")
     refresh = config.get("refresh_secs", 1800)
-    price = config.get("price_per_1k_tokens", 0.0)
+    price = config.get("price_per_mtok", 0.0)
 
     print()
     print("  ╔══════════════════════════════════════════════════════╗")
@@ -491,7 +492,7 @@ def main() -> None:
     print(f"  GPU:      {gpu['gpu_name']} ({gpu['vram_mb']} MB VRAM)")
     print(f"  Models:   {len(selected_models)}")
     print(f"  Endpoint: {endpoint}")
-    print(f"  Price:    {'FREE' if price == 0 else f'${price}/1K tokens'}")
+    print(f"  Price:    {'FREE' if price == 0 else f'${price:.2f}/M tokens'}")
     print(f"  Region:   {config.get('region', 'unknown')}")
     if config.get("stripe_account"):
         print(f"  Stripe:   {config['stripe_account']}")
