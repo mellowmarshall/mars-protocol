@@ -107,13 +107,13 @@ def start_ngrok(port: int = 11434) -> str | None:
     log.info("Starting ngrok tunnel to port %d...", port)
 
     # Start ngrok in background
-    proc = subprocess.Popen(
+    _proc = subprocess.Popen(
         ["ngrok", "http", str(port), "--log=stdout", "--log-format=json"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
     # Wait for tunnel to establish, then query the local API
-    for attempt in range(15):
+    for _ in range(15):
         time.sleep(1)
         try:
             r = httpx.get("http://127.0.0.1:4040/api/tunnels", timeout=3)
@@ -168,6 +168,8 @@ def build_descriptors(
                 "price_per_1k_tokens": price_per_1k_tokens,
                 "currency": "USD",
                 "region": region,
+                "stripe_account": "",  # Set by caller if paid
+                "accepts_payment": price_per_1k_tokens > 0,
                 "ollama_api": f"{endpoint}/api/generate",
                 "openai_compat": f"{endpoint}/v1/chat/completions",
             },
@@ -216,6 +218,8 @@ def main() -> None:
     parser.add_argument("--region", default="unknown", help="Provider region (e.g. us-east)")
     parser.add_argument("--models", default=None,
                         help="Comma-separated model names to advertise (default: all installed)")
+    parser.add_argument("--stripe-account", default=None,
+                        help="Stripe Connect account ID for payments (e.g. acct_xxx)")
     parser.add_argument("--refresh", type=int, default=1800,
                         help="Seconds between re-publish cycles (default: 1800)")
     args = parser.parse_args()
@@ -262,8 +266,19 @@ def main() -> None:
 
     log.info("Models to advertise: %s", ", ".join(m["name"] for m in models))
 
+    # Validate pricing + stripe
+    if args.price > 0 and not args.stripe_account:
+        log.warning("Price set to $%.2f/1K tokens but no --stripe-account provided", args.price)
+        log.warning("Providers without Stripe cannot receive payments. Add --stripe-account acct_xxx")
+        log.warning("Or set --price 0 to provide for free")
+
     # Build descriptors
     descriptors = build_descriptors(gpu, models, endpoint, args.price, args.region)
+
+    # Inject Stripe account if provided
+    if args.stripe_account:
+        for d in descriptors:
+            d["params"]["stripe_account"] = args.stripe_account
 
     # Publish loop
     log.info("Publishing %d capabilities to %s...", len(descriptors), args.gateway)
