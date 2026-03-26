@@ -46,8 +46,8 @@ For each active model on the Petals swarm:
 type:     compute/inference/text-generation
 endpoint: https://chat.petals.dev/api/v1/chat/completions
 params:
-  name:              "Llama-4-Maverick-400B (Petals Swarm)"
-  model:             "meta-llama/Llama-4-Maverick-400B"
+  name:              "GLM-5 (Petals Swarm)"
+  model:             "meta-llama/GLM-5"
   provider:          "petals"
   active_servers:    47
   distributed:       true
@@ -58,7 +58,7 @@ params:
 Agents discover it with:
 ```python
 providers = client.discover("compute/inference/text-generation")
-# → "Llama-4-Maverick-400B (Petals Swarm)" — 47 servers, free, OpenAI-compatible
+# → "GLM-5 (Petals Swarm)" — 47 servers, free, OpenAI-compatible
 ```
 
 ## Using Petals Models
@@ -69,7 +69,7 @@ The endpoint is OpenAI-compatible. Any agent can call it directly:
 import httpx
 
 r = httpx.post("https://chat.petals.dev/api/v1/chat/completions", json={
-    "model": "meta-llama/Llama-4-Maverick-400B",
+    "model": "meta-llama/GLM-5",
     "messages": [{"role": "user", "content": "Hello!"}],
     "max_tokens": 100,
 })

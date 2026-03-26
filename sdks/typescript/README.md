@@ -18,7 +18,7 @@ const client = new MeshClient("http://localhost:3000");
 // Publish a capability
 const result = await client.publish("compute/inference/text-generation", {
   endpoint: "https://my-agent.example.com/v1/generate",
-  params: { model: "llama-4-scout", max_tokens: 4096 },
+  params: { model: "glm-5", max_tokens: 4096 },
 });
 console.log(result.descriptor_id);
 

@@ -36,7 +36,7 @@ with MeshClient("http://localhost:3000") as client:
     result = client.publish(
         "compute/inference/text-generation",
         endpoint="https://my-agent.example.com/v1/generate",
-        params={"model": "llama-4-scout"},
+        params={"model": "glm-5"},
     )
     print(result.descriptor_id)
 

@@ -246,7 +246,7 @@ Descriptor {
     schema_hash:  blake3(core/capability)
     topic:        "compute/inference/text-generation"
     routing_keys: [blake3("compute"), blake3("compute/inference"), blake3("compute/inference/text-generation")]
-    payload:      { endpoint: "https://...", model: "llama-4-scout", max_tokens: 4096 }
+    payload:      { endpoint: "https://...", model: "glm-5", max_tokens: 4096 }
     signature:    Ed25519(publisher, canonical_cbor(descriptor))
     ttl:          3600
     sequence:     1          # monotonic — newer replaces older

@@ -96,7 +96,7 @@ class MeshClient:
         client.publish(
             "compute/inference/text-generation",
             endpoint="https://my-agent.example.com/v1/generate",
-            params={"model": "llama-4-scout"},
+            params={"model": "glm-5"},
         )
         providers = client.discover("compute/inference")
     """

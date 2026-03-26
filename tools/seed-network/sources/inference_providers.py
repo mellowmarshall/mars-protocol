@@ -13,7 +13,7 @@ INFERENCE_PROVIDERS = [
             "auth": "TOGETHER_API_KEY",
             "openai_compatible": True,
             "docs": "https://docs.together.ai",
-            "models": ["meta-llama/Llama-4-Scout", "deepseek-ai/DeepSeek-V3", "Qwen/Qwen3-235B", "mistralai/Mistral-Large-3"],
+            "models": ["THUDM/GLM-5", "deepseek-ai/DeepSeek-V3.2", "Qwen/Qwen3.5-397B", "moonshotai/Kimi-K2.5"],
         },
     },
     # ── Groq ──────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@ INFERENCE_PROVIDERS = [
             "auth": "GROQ_API_KEY",
             "openai_compatible": True,
             "docs": "https://console.groq.com/docs",
-            "models": ["llama-4-scout-17b", "deepseek-r1-distill-llama-70b", "qwen-qwq-32b"],
+            "models": ["glm-5", "deepseek-v3.2", "kimi-k2.5"],
         },
     },
     # ── Fireworks ─────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ INFERENCE_PROVIDERS = [
             "auth": "FIREWORKS_API_KEY",
             "openai_compatible": True,
             "docs": "https://docs.fireworks.ai",
-            "models": ["accounts/fireworks/models/llama4-scout-instruct", "accounts/fireworks/models/deepseek-v3"],
+            "models": ["accounts/fireworks/models/glm-5", "accounts/fireworks/models/deepseek-v3"],
         },
     },
     # ── DeepInfra ─────────────────────────────────────────────────────────

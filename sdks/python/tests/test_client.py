@@ -24,7 +24,7 @@ SAMPLE_DESCRIPTOR = {
     "publisher": "did:key:z6Mktest",
     "type": "compute/inference/text-generation",
     "endpoint": "https://agent.example.com/v1/generate",
-    "params": {"model": "llama-4-scout"},
+    "params": {"model": "glm-5"},
     "timestamp": 1700000000000000,
     "ttl": 3600,
     "sequence": 1,
@@ -47,7 +47,7 @@ def test_publish():
     result = client.publish(
         "compute/inference/text-generation",
         endpoint="https://agent.example.com/v1/generate",
-        params={"model": "llama-4-scout"},
+        params={"model": "glm-5"},
     )
     client.close()
 
@@ -63,7 +63,7 @@ def test_publish():
     parsed = json.loads(body)
     assert parsed["type"] == "compute/inference/text-generation"
     assert parsed["endpoint"] == "https://agent.example.com/v1/generate"
-    assert parsed["params"] == {"model": "llama-4-scout"}
+    assert parsed["params"] == {"model": "glm-5"}
 
 
 @respx.mock
@@ -86,7 +86,7 @@ def test_discover():
     assert d.publisher == "did:key:z6Mktest"
     assert d.type == "compute/inference/text-generation"
     assert d.endpoint == "https://agent.example.com/v1/generate"
-    assert d.params == {"model": "llama-4-scout"}
+    assert d.params == {"model": "glm-5"}
     assert d.timestamp == 1700000000000000
     assert d.ttl == 3600
     assert d.sequence == 1

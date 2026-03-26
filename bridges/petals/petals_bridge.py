@@ -119,12 +119,12 @@ def discover_via_dht(
 
     # Query for known model prefixes
     known_models = [
-        "meta-llama/Llama-4-Maverick-17B-128E-Instruct",
-        "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "deepseek-ai/DeepSeek-V3-0324",
+        "THUDM/GLM-5",
+        "moonshotai/Kimi-K2.5",
+        "deepseek-ai/DeepSeek-V3.2",
         "deepseek-ai/DeepSeek-R1",
-        "Qwen/Qwen3-235B-A22B",
-        "mistralai/Mistral-Large-3",
+        "Qwen/Qwen3.5-397B-A17B",
+        "gpt-oss/gpt-oss-120B",
         "meta-llama/Meta-Llama-3.1-405B-Instruct",
         "bigscience/bloom",
     ]
