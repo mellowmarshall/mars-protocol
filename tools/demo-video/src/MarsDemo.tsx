@@ -1,6 +1,7 @@
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate } from "remotion";
 import { Terminal, TypedLine, OutputLine, Spacer, COLORS } from "./Terminal";
+import { MiniTerminal, THEMES } from "./MiniTerminal";
 
 // ── Line data with timing ────────────────────────────────────────────
 // Each line has: when it appears (seconds), type, and content.
@@ -60,7 +61,59 @@ const LINES: Line[] = [
 
 ];
 
-const CLOSING_START = 22; // seconds — when the fade begins
+const MONTAGE_START = 22;  // seconds — terminals start stacking
+const CLOSING_START = 32;  // seconds — fade to MARS logo
+
+// ── Montage: service connection terminals ────────────────────────────
+// Each entry: [seconds_after_montage_start, theme_key, title, command, output_lines, x, y]
+type MontageEntry = [number, string, string, string, string[], number, number];
+
+const MONTAGE_TERMINALS: MontageEntry[] = [
+  [0, "openclaw", "agent — search", 'client.discover("data/search/ai")', [
+    "→ Tavily: AI-optimized web search",
+    "→ Exa: Neural search engine",
+  ], 50, 40],
+  [1.2, "claude", "claude — inference", 'openai.chat.completions.create(model="glm-5")', [
+    "→ Connected to GLM-5 (HuggingFace)",
+    '→ Response: "The MARS protocol is..."',
+  ], 200, 100],
+  [2.2, "codex", "codex — code review", 'mesh.discover("compute/analysis/code-review")', [
+    "→ Found 3 providers",
+    "→ Calling my-agent.dev/review...",
+  ], 80, 180],
+  [3.0, "openclaw", "agent — scraping", 'firecrawl.scrape("https://mars-protocol.dev")', [
+    "→ Firecrawl: 500 credits/mo free",
+    "→ Scraping... 2.3s",
+  ], 350, 60],
+  [3.6, "claude", "claude — image gen", 'fal.run("flux.1-dev", prompt="mesh network")', [
+    "→ fal.ai: FLUX.1 image generation",
+    "→ Generated 1024x1024 in 4.1s",
+  ], 150, 220],
+  [4.1, "codex", "codex — sandbox", 'e2b.sandbox.run("python3 train.py")', [
+    "→ E2B: Cloud code execution",
+    "→ Sandbox ready (0.3s)",
+  ], 420, 150],
+  [4.5, "openclaw", "agent — database", 'neon.query("SELECT * FROM agents LIMIT 10")', [
+    "→ Neon Serverless Postgres",
+    "→ 10 rows (12ms)",
+  ], 100, 300],
+  [4.8, "claude", "claude — MCP tools", 'mcp.call_tool("github", {repo: "mars-protocol"})', [
+    "→ 15 MCP tools available",
+    "→ GitHub: 42 stars, 7 forks",
+  ], 300, 280],
+  [5.0, "codex", "codex — embeddings", 'embed("MARS protocol for agent discovery")', [
+    "→ BGE Large: 1024-dim vector",
+  ], 500, 100],
+  [5.2, "openclaw", "agent — translation", 'translate("Hello", target="ja")', [
+    "→ NLLB: こんにちは",
+  ], 50, 380],
+  [5.3, "claude", "claude — weather", 'open_meteo.forecast(lat=40.7, lon=-74.0)', [
+    "→ NYC: 24°C, sunny",
+  ], 450, 330],
+  [5.4, "codex", "codex — speech", 'whisper.transcribe("meeting.mp3")', [
+    "→ Whisper v3 Turbo",
+  ], 250, 380],
+];
 
 const ASCII_MARS = `
  ███╗   ███╗  █████╗  ██████╗  ███████╗
@@ -136,6 +189,22 @@ export const MarsDemo: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* ── Montage: stacking terminal windows ── */}
+      {frame >= Math.round(MONTAGE_START * fps) && MONTAGE_TERMINALS.map(([delay, themeKey, title, command, output, mx, my], i) => (
+        <MiniTerminal
+          key={`montage-${i}`}
+          theme={THEMES[themeKey]}
+          title={title}
+          command={command}
+          output={output}
+          startFrame={Math.round((MONTAGE_START + delay) * fps)}
+          x={mx}
+          y={my}
+          width={560}
+          height={240}
+        />
+      ))}
 
       {/* ── Closing: fade overlay with ASCII MARS ── */}
       {frame >= Math.round(CLOSING_START * fps) && (() => {
