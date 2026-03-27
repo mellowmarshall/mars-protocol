@@ -22,18 +22,18 @@ const LINES: Line[] = [
 
   // Install
   { at: 2.5, type: "spacer" },
-  { at: 2.5, type: "typed", text: "pip install mesh-protocol", prefix: "$ ", prefixColor: COLORS.green, charsPerFrame: 2 },
+  { at: 2.5, type: "typed", text: "pip install mesh-protocol", prefix: "$ ", prefixColor: COLORS.orange, charsPerFrame: 2 },
   { at: 3.8, type: "output", text: "Successfully installed mesh-protocol-0.1.0", color: COLORS.dimmed },
 
   // Connect
   { at: 5, type: "spacer" },
-  { at: 5, type: "typed", text: "from mesh_protocol import MeshClient", prefix: ">>> ", prefixColor: COLORS.green },
-  { at: 6, type: "typed", text: 'client = MeshClient("http://localhost:3000")', prefix: ">>> ", prefixColor: COLORS.green },
+  { at: 5, type: "typed", text: "from mesh_protocol import MeshClient", prefix: "🦞 ", prefixColor: COLORS.orange },
+  { at: 6, type: "typed", text: 'client = MeshClient("http://localhost:3000")', prefix: "🦞 ", prefixColor: COLORS.orange },
 
   // Discover Search
   { at: 7.5, type: "spacer" },
   { at: 7.5, type: "output", text: "# What search tools are on the mesh?", color: COLORS.dimmed },
-  { at: 8, type: "typed", text: 'results = client.discover("data/search")', prefix: ">>> ", prefixColor: COLORS.green },
+  { at: 8, type: "typed", text: 'results = client.discover("data/search")', prefix: "🦞 ", prefixColor: COLORS.orange },
   { at: 9.5, type: "output", text: "  data/search/ai          Tavily", color: COLORS.yellow },
   { at: 9.8, type: "output", text: "  data/search/ai          Exa", color: COLORS.yellow },
   { at: 10.1, type: "output", text: "  data/search/serp        Serper", color: COLORS.yellow },
@@ -42,20 +42,20 @@ const LINES: Line[] = [
   // Discover Inference
   { at: 11.5, type: "spacer" },
   { at: 11.5, type: "output", text: "# LLM inference?", color: COLORS.dimmed },
-  { at: 12, type: "typed", text: 'client.discover("compute/inference")', prefix: ">>> ", prefixColor: COLORS.green },
+  { at: 12, type: "typed", text: 'client.discover("compute/inference")', prefix: "🦞 ", prefixColor: COLORS.orange },
   { at: 13.2, type: "output", text: "  11 providers: GLM-5, OpenRouter, Groq, fal.ai, ...", color: COLORS.yellow },
 
   // Discover MCP
   { at: 14.5, type: "spacer" },
   { at: 14.5, type: "output", text: "# MCP tools?", color: COLORS.dimmed },
-  { at: 15, type: "typed", text: 'client.discover("mcp/tool")', prefix: ">>> ", prefixColor: COLORS.green },
+  { at: 15, type: "typed", text: 'client.discover("mcp/tool")', prefix: "🦞 ", prefixColor: COLORS.orange },
   { at: 16.2, type: "output", text: "  15 tools: GitHub, Playwright, Postgres, Slack, ...", color: COLORS.yellow },
 
   // Publish
   { at: 17.5, type: "spacer" },
   { at: 17.5, type: "output", text: "# Publish my own capability", color: COLORS.dimmed },
-  { at: 18, type: "typed", text: 'client.publish("compute/analysis/code-review",', prefix: ">>> ", prefixColor: COLORS.green },
-  { at: 19, type: "typed", text: '    endpoint="https://my-agent.dev/review")', prefix: "... ", prefixColor: COLORS.green },
+  { at: 18, type: "typed", text: 'client.publish("compute/analysis/code-review",', prefix: "🦞 ", prefixColor: COLORS.orange },
+  { at: 19, type: "typed", text: '    endpoint="https://my-agent.dev/review")', prefix: "   ", prefixColor: COLORS.orange },
   { at: 20.5, type: "output", text: "  ✓ Published — discoverable by any agent on the mesh", color: COLORS.green },
 
   // Closing

@@ -4,15 +4,16 @@ import { useCurrentFrame, interpolate } from "remotion";
 // ── Terminal chrome ──────────────────────────────────────────────────
 
 const COLORS = {
-  bg: "#1a1b26",
-  fg: "#a9b1d6",
+  bg: "#1a1b1e",
+  fg: "#c9cdd6",
   green: "#9ece6a",
   cyan: "#7dcfff",
   yellow: "#e0af68",
   red: "#f7768e",
+  orange: "#FF5A2D",  // lobster accent
   magenta: "#bb9af7",
   dimmed: "#565f89",
-  prompt: "#73daca",
+  prompt: "#FF5A2D",  // orange prompt — subtle nod
 };
 
 export const Terminal: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -49,7 +50,7 @@ export const Terminal: React.FC<{ children: React.ReactNode }> = ({ children }) 
           left: 0,
         }}
       >
-        mars-protocol — demo
+        🦞 agent — mesh discovery
       </div>
       {children}
     </div>
