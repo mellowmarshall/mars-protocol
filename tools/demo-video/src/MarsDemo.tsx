@@ -1,5 +1,5 @@
 import React from "react";
-import { useCurrentFrame, useVideoConfig } from "remotion";
+import { useCurrentFrame, useVideoConfig, interpolate } from "remotion";
 import { Terminal, TypedLine, OutputLine, Spacer, COLORS } from "./Terminal";
 
 // ── Line data with timing ────────────────────────────────────────────
@@ -58,15 +58,17 @@ const LINES: Line[] = [
   { at: 19, type: "typed", text: '    endpoint="https://my-agent.dev/review")', prefix: "   ", prefixColor: COLORS.orange },
   { at: 20.5, type: "output", text: "  ✓ Published — discoverable by any agent on the mesh", color: COLORS.green },
 
-  // Closing
-  { at: 22, type: "spacer" },
-  { at: 22, type: "spacer" },
-  { at: 22, type: "output", text: "  No config files. No central registry. No API keys.", color: "#ffffff" },
-  { at: 23, type: "output", text: "  Just a DHT.", color: "#ffffff" },
-  { at: 24, type: "spacer" },
-  { at: 24, type: "output", text: "  github.com/mellowmarshall/mars-protocol", color: COLORS.cyan },
-  { at: 25, type: "output", text: "  pip install mesh-protocol", color: COLORS.magenta },
 ];
+
+const CLOSING_START = 22; // seconds — when the fade begins
+
+const ASCII_MARS = `
+ ███╗   ███╗  █████╗  ██████╗  ███████╗
+ ████╗ ████║ ██╔══██╗ ██╔══██╗ ██╔════╝
+ ██╔████╔██║ ███████║ ██████╔╝ ███████╗
+ ██║╚██╔╝██║ ██╔══██║ ██╔══██╗ ╚════██║
+ ██║ ╚═╝ ██║ ██║  ██║ ██║  ██║ ███████║
+ ╚═╝     ╚═╝ ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚══════╝`.trim();
 
 // ── Terminal height and scroll ───────────────────────────────────────
 
@@ -134,6 +136,52 @@ export const MarsDemo: React.FC = () => {
           })}
         </div>
       </div>
+
+      {/* ── Closing: fade overlay with ASCII MARS ── */}
+      {frame >= Math.round(CLOSING_START * fps) && (() => {
+        const closingFrame = frame - Math.round(CLOSING_START * fps);
+        const bgOpacity = interpolate(closingFrame, [0, Math.round(1.5 * fps)], [0, 1], {
+          extrapolateRight: "clamp",
+        });
+        const titleOpacity = interpolate(closingFrame, [Math.round(1 * fps), Math.round(2 * fps)], [0, 1], {
+          extrapolateLeft: "clamp", extrapolateRight: "clamp",
+        });
+        const asciiOpacity = interpolate(closingFrame, [Math.round(2 * fps), Math.round(3 * fps)], [0, 1], {
+          extrapolateLeft: "clamp", extrapolateRight: "clamp",
+        });
+        const subtitleOpacity = interpolate(closingFrame, [Math.round(3 * fps), Math.round(4 * fps)], [0, 1], {
+          extrapolateLeft: "clamp", extrapolateRight: "clamp",
+        });
+
+        return (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: COLORS.bg,
+              opacity: bgOpacity,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            }}
+          >
+            <div style={{ opacity: titleOpacity, fontSize: 18, color: COLORS.dimmed, letterSpacing: "0.15em", marginBottom: 16 }}>
+              Mesh Agent Routing Standard
+            </div>
+            <pre style={{ opacity: asciiOpacity, color: COLORS.orange, fontSize: 16, lineHeight: 1.2, textAlign: "center", margin: 0 }}>
+              {ASCII_MARS}
+            </pre>
+            <div style={{ opacity: subtitleOpacity, fontSize: 18, color: COLORS.dimmed, letterSpacing: "0.15em", marginTop: 16 }}>
+              Protocol
+            </div>
+          </div>
+        );
+      })()}
     </Terminal>
   );
 };
