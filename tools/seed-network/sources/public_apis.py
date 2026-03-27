@@ -8,7 +8,9 @@ PUBLIC_APIS = [
         "params": {
             "name": "DuckDuckGo Instant Answer",
             "format": "json",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://api.duckduckgo.com/api",
         },
     },
@@ -18,7 +20,9 @@ PUBLIC_APIS = [
         "params": {
             "name": "Wikipedia",
             "format": "json",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://www.mediawiki.org/wiki/API:Main_page",
         },
     },
@@ -28,14 +32,21 @@ PUBLIC_APIS = [
         "endpoint": "https://api.open-meteo.com/v1/forecast",
         "params": {
             "name": "Open-Meteo",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://open-meteo.com/en/docs",
         },
     },
     {
         "type": "data/weather/forecast",
         "endpoint": "https://api.open-meteo.com/v1/forecast",
-        "params": {"name": "Open-Meteo Forecast", "auth": "none"},
+        "params": {
+            "name": "Open-Meteo Forecast",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # Geocoding
     {
@@ -44,20 +55,33 @@ PUBLIC_APIS = [
         "params": {
             "name": "Nominatim (OpenStreetMap)",
             "format": "json",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://nominatim.org/release-docs/latest/api/Search/",
         },
     },
     {
         "type": "data/geo/reverse",
         "endpoint": "https://nominatim.openstreetmap.org/reverse",
-        "params": {"name": "Nominatim Reverse", "auth": "none"},
+        "params": {
+            "name": "Nominatim Reverse",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # Time/Date
     {
         "type": "data/time/timezone",
         "endpoint": "http://worldtimeapi.org/api/timezone",
-        "params": {"name": "WorldTimeAPI", "format": "json", "auth": "none"},
+        "params": {
+            "name": "WorldTimeAPI",
+            "format": "json",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # Exchange rates
     {
@@ -65,7 +89,9 @@ PUBLIC_APIS = [
         "endpoint": "https://api.exchangerate-api.com/v4/latest/USD",
         "params": {
             "name": "ExchangeRate-API",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://www.exchangerate-api.com/docs/overview",
         },
     },
@@ -73,23 +99,43 @@ PUBLIC_APIS = [
     {
         "type": "data/network/ip-info",
         "endpoint": "https://ipapi.co/json/",
-        "params": {"name": "ipapi.co", "auth": "none"},
+        "params": {
+            "name": "ipapi.co",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     {
         "type": "data/network/ip-geolocation",
         "endpoint": "https://ipinfo.io/json",
-        "params": {"name": "IPinfo", "auth": "free-tier"},
+        "params": {
+            "name": "IPinfo",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # Random/Utility
     {
         "type": "data/utility/uuid",
         "endpoint": "https://httpbin.org/uuid",
-        "params": {"name": "httpbin UUID", "auth": "none"},
+        "params": {
+            "name": "httpbin UUID",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     {
         "type": "data/utility/user-agent",
         "endpoint": "https://httpbin.org/user-agent",
-        "params": {"name": "httpbin User-Agent", "auth": "none"},
+        "params": {
+            "name": "httpbin User-Agent",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # GitHub
     {
@@ -97,14 +143,21 @@ PUBLIC_APIS = [
         "endpoint": "https://api.github.com/search/repositories",
         "params": {
             "name": "GitHub Search API",
-            "auth": "optional-token",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://docs.github.com/en/rest/search",
         },
     },
     {
         "type": "data/code/github-users",
         "endpoint": "https://api.github.com/users",
-        "params": {"name": "GitHub Users API", "auth": "optional-token"},
+        "params": {
+            "name": "GitHub Users API",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # News
     {
@@ -113,7 +166,9 @@ PUBLIC_APIS = [
         "params": {
             "name": "Hacker News API",
             "format": "json",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://github.com/HackerNews/API",
         },
     },
@@ -121,7 +176,12 @@ PUBLIC_APIS = [
     {
         "type": "data/text/dictionary",
         "endpoint": "https://api.dictionaryapi.dev/api/v2/entries/en",
-        "params": {"name": "Free Dictionary API", "auth": "none"},
+        "params": {
+            "name": "Free Dictionary API",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # Images
     {
@@ -129,7 +189,9 @@ PUBLIC_APIS = [
         "endpoint": "https://picsum.photos",
         "params": {
             "name": "Lorem Picsum",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://picsum.photos",
         },
     },
@@ -137,12 +199,22 @@ PUBLIC_APIS = [
     {
         "type": "data/science/iss-position",
         "endpoint": "http://api.open-notify.org/iss-now.json",
-        "params": {"name": "ISS Position", "auth": "none"},
+        "params": {
+            "name": "ISS Position",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     {
         "type": "data/science/astronomy-picture",
         "endpoint": "https://api.nasa.gov/planetary/apod",
-        "params": {"name": "NASA APOD", "auth": "api_key=DEMO_KEY"},
+        "params": {
+            "name": "NASA APOD",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     # Country data
     {
@@ -150,7 +222,9 @@ PUBLIC_APIS = [
         "endpoint": "https://restcountries.com/v3.1/all",
         "params": {
             "name": "REST Countries",
-            "auth": "none",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
             "docs": "https://restcountries.com",
         },
     },
@@ -158,11 +232,21 @@ PUBLIC_APIS = [
     {
         "type": "data/fun/jokes",
         "endpoint": "https://official-joke-api.appspot.com/random_joke",
-        "params": {"name": "Official Joke API", "auth": "none"},
+        "params": {
+            "name": "Official Joke API",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
     {
         "type": "data/fun/cat-facts",
         "endpoint": "https://catfact.ninja/fact",
-        "params": {"name": "Cat Facts", "auth": "none"},
+        "params": {
+            "name": "Cat Facts",
+            "auth": {"method": "none"},
+            "protocol": "rest",
+            "pricing": {"model": "free"},
+        },
     },
 ]

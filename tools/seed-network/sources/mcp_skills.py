@@ -11,6 +11,8 @@ MCP_SKILLS = [
             "transport": "stdio",
             "installs": "180000+",
             "description": "Fetch web pages for research and fact-checking",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -21,7 +23,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Web search via Brave Search API",
-            "auth": "BRAVE_API_KEY",
+            "auth": {"method": "api_key", "key_name": "BRAVE_API_KEY", "signup_url": "https://brave.com/search/api/"},
+            "pricing": {"model": "freemium", "free_tier": "2,000 queries/month", "paid_url": "https://brave.com/search/api/"},
         },
     },
     {
@@ -32,6 +35,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Read, write, and manage files",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -42,7 +47,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "GitHub API integration — repos, issues, PRs",
-            "auth": "GITHUB_TOKEN",
+            "auth": {"method": "api_key", "key_name": "GITHUB_TOKEN", "signup_url": "https://github.com/settings/tokens"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -53,6 +59,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Query PostgreSQL databases",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -63,6 +71,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Read and query SQLite databases",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -73,6 +83,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Persistent memory via knowledge graph",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -83,6 +95,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Browser automation via Puppeteer",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -93,7 +107,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Slack workspace integration",
-            "auth": "SLACK_TOKEN",
+            "auth": {"method": "api_key", "key_name": "SLACK_TOKEN", "signup_url": "https://api.slack.com/apps"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -104,7 +119,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Geocoding, directions, places",
-            "auth": "GOOGLE_MAPS_KEY",
+            "auth": {"method": "api_key", "key_name": "GOOGLE_MAPS_KEY", "signup_url": "https://console.cloud.google.com/apis/credentials"},
+            "pricing": {"model": "freemium", "free_tier": "$200/month free credit", "paid_url": "https://developers.google.com/maps/billing"},
         },
     },
     # Popular community skills
@@ -116,7 +132,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "AI-optimized web search",
-            "auth": "TAVILY_API_KEY",
+            "auth": {"method": "api_key", "key_name": "TAVILY_API_KEY", "signup_url": "https://tavily.com"},
+            "pricing": {"model": "freemium", "free_tier": "1,000 credits/month", "paid_url": "https://tavily.com/pricing"},
         },
     },
     {
@@ -127,6 +144,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Browser automation via Playwright",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -137,6 +156,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Step-by-step reasoning tool",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -147,6 +168,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Up-to-date library documentation",
+            "auth": {"method": "none"},
+            "pricing": {"model": "free"},
         },
     },
     {
@@ -157,7 +180,8 @@ MCP_SKILLS = [
             "protocol": "mcp",
             "transport": "stdio",
             "description": "Web scraping and crawling",
-            "auth": "FIRECRAWL_API_KEY",
+            "auth": {"method": "api_key", "key_name": "FIRECRAWL_API_KEY", "signup_url": "https://firecrawl.dev"},
+            "pricing": {"model": "freemium", "free_tier": "500 credits/month", "paid_url": "https://firecrawl.dev/pricing"},
         },
     },
 ]

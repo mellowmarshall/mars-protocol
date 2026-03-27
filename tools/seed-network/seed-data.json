@@ -5,7 +5,13 @@
     "params": {
       "name": "DuckDuckGo Instant Answer",
       "format": "json",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://api.duckduckgo.com/api"
     }
   },
@@ -15,7 +21,13 @@
     "params": {
       "name": "Wikipedia",
       "format": "json",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://www.mediawiki.org/wiki/API:Main_page"
     }
   },
@@ -24,7 +36,13 @@
     "endpoint": "https://api.open-meteo.com/v1/forecast",
     "params": {
       "name": "Open-Meteo",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://open-meteo.com/en/docs"
     }
   },
@@ -33,7 +51,13 @@
     "endpoint": "https://api.open-meteo.com/v1/forecast",
     "params": {
       "name": "Open-Meteo Forecast",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -42,7 +66,13 @@
     "params": {
       "name": "Nominatim (OpenStreetMap)",
       "format": "json",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://nominatim.org/release-docs/latest/api/Search/"
     }
   },
@@ -51,7 +81,13 @@
     "endpoint": "https://nominatim.openstreetmap.org/reverse",
     "params": {
       "name": "Nominatim Reverse",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -60,7 +96,13 @@
     "params": {
       "name": "WorldTimeAPI",
       "format": "json",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -68,7 +110,13 @@
     "endpoint": "https://api.exchangerate-api.com/v4/latest/USD",
     "params": {
       "name": "ExchangeRate-API",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://www.exchangerate-api.com/docs/overview"
     }
   },
@@ -77,7 +125,13 @@
     "endpoint": "https://ipapi.co/json/",
     "params": {
       "name": "ipapi.co",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -85,7 +139,13 @@
     "endpoint": "https://ipinfo.io/json",
     "params": {
       "name": "IPinfo",
-      "auth": "free-tier"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -93,7 +153,13 @@
     "endpoint": "https://httpbin.org/uuid",
     "params": {
       "name": "httpbin UUID",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -101,7 +167,13 @@
     "endpoint": "https://httpbin.org/user-agent",
     "params": {
       "name": "httpbin User-Agent",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -109,7 +181,13 @@
     "endpoint": "https://api.github.com/search/repositories",
     "params": {
       "name": "GitHub Search API",
-      "auth": "optional-token",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://docs.github.com/en/rest/search"
     }
   },
@@ -118,7 +196,13 @@
     "endpoint": "https://api.github.com/users",
     "params": {
       "name": "GitHub Users API",
-      "auth": "optional-token"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -127,7 +211,13 @@
     "params": {
       "name": "Hacker News API",
       "format": "json",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://github.com/HackerNews/API"
     }
   },
@@ -136,7 +226,13 @@
     "endpoint": "https://api.dictionaryapi.dev/api/v2/entries/en",
     "params": {
       "name": "Free Dictionary API",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -144,7 +240,13 @@
     "endpoint": "https://picsum.photos",
     "params": {
       "name": "Lorem Picsum",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://picsum.photos"
     }
   },
@@ -153,7 +255,13 @@
     "endpoint": "http://api.open-notify.org/iss-now.json",
     "params": {
       "name": "ISS Position",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -161,7 +269,13 @@
     "endpoint": "https://api.nasa.gov/planetary/apod",
     "params": {
       "name": "NASA APOD",
-      "auth": "api_key=DEMO_KEY"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -169,7 +283,13 @@
     "endpoint": "https://restcountries.com/v3.1/all",
     "params": {
       "name": "REST Countries",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://restcountries.com"
     }
   },
@@ -178,7 +298,13 @@
     "endpoint": "https://official-joke-api.appspot.com/random_joke",
     "params": {
       "name": "Official Joke API",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -186,7 +312,13 @@
     "endpoint": "https://catfact.ninja/fact",
     "params": {
       "name": "Cat Facts",
-      "auth": "none"
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -197,7 +329,13 @@
       "protocol": "mcp",
       "transport": "stdio",
       "installs": "180000+",
-      "description": "Fetch web pages for research and fact-checking"
+      "description": "Fetch web pages for research and fact-checking",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -208,7 +346,16 @@
       "protocol": "mcp",
       "transport": "stdio",
       "description": "Web search via Brave Search API",
-      "auth": "BRAVE_API_KEY"
+      "auth": {
+        "method": "api_key",
+        "key_name": "BRAVE_API_KEY",
+        "signup_url": "https://brave.com/search/api/"
+      },
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "2,000 queries/month",
+        "paid_url": "https://brave.com/search/api/"
+      }
     }
   },
   {
@@ -218,7 +365,13 @@
       "name": "Filesystem",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Read, write, and manage files"
+      "description": "Read, write, and manage files",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -229,7 +382,14 @@
       "protocol": "mcp",
       "transport": "stdio",
       "description": "GitHub API integration \u2014 repos, issues, PRs",
-      "auth": "GITHUB_TOKEN"
+      "auth": {
+        "method": "api_key",
+        "key_name": "GITHUB_TOKEN",
+        "signup_url": "https://github.com/settings/tokens"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -239,7 +399,13 @@
       "name": "PostgreSQL",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Query PostgreSQL databases"
+      "description": "Query PostgreSQL databases",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -249,7 +415,13 @@
       "name": "SQLite",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Read and query SQLite databases"
+      "description": "Read and query SQLite databases",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -259,7 +431,13 @@
       "name": "Memory",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Persistent memory via knowledge graph"
+      "description": "Persistent memory via knowledge graph",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -269,7 +447,13 @@
       "name": "Puppeteer",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Browser automation via Puppeteer"
+      "description": "Browser automation via Puppeteer",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -280,7 +464,14 @@
       "protocol": "mcp",
       "transport": "stdio",
       "description": "Slack workspace integration",
-      "auth": "SLACK_TOKEN"
+      "auth": {
+        "method": "api_key",
+        "key_name": "SLACK_TOKEN",
+        "signup_url": "https://api.slack.com/apps"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -291,7 +482,16 @@
       "protocol": "mcp",
       "transport": "stdio",
       "description": "Geocoding, directions, places",
-      "auth": "GOOGLE_MAPS_KEY"
+      "auth": {
+        "method": "api_key",
+        "key_name": "GOOGLE_MAPS_KEY",
+        "signup_url": "https://console.cloud.google.com/apis/credentials"
+      },
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$200/month free credit",
+        "paid_url": "https://developers.google.com/maps/billing"
+      }
     }
   },
   {
@@ -302,7 +502,16 @@
       "protocol": "mcp",
       "transport": "stdio",
       "description": "AI-optimized web search",
-      "auth": "TAVILY_API_KEY"
+      "auth": {
+        "method": "api_key",
+        "key_name": "TAVILY_API_KEY",
+        "signup_url": "https://tavily.com"
+      },
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "1,000 credits/month",
+        "paid_url": "https://tavily.com/pricing"
+      }
     }
   },
   {
@@ -312,7 +521,13 @@
       "name": "Playwright",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Browser automation via Playwright"
+      "description": "Browser automation via Playwright",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -322,7 +537,13 @@
       "name": "Sequential Thinking",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Step-by-step reasoning tool"
+      "description": "Step-by-step reasoning tool",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -332,7 +553,13 @@
       "name": "Context7",
       "protocol": "mcp",
       "transport": "stdio",
-      "description": "Up-to-date library documentation"
+      "description": "Up-to-date library documentation",
+      "auth": {
+        "method": "none"
+      },
+      "pricing": {
+        "model": "free"
+      }
     }
   },
   {
@@ -343,7 +570,16 @@
       "protocol": "mcp",
       "transport": "stdio",
       "description": "Web scraping and crawling",
-      "auth": "FIRECRAWL_API_KEY"
+      "auth": {
+        "method": "api_key",
+        "key_name": "FIRECRAWL_API_KEY",
+        "signup_url": "https://firecrawl.dev"
+      },
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "500 credits/month",
+        "paid_url": "https://firecrawl.dev/pricing"
+      }
     }
   },
   {
@@ -352,7 +588,16 @@
     "params": {
       "name": "GLM-5 (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "THUDM/GLM-5",
       "description": "GLM-5 \u2014 top-ranked open-weight model, reasoning"
     }
@@ -363,7 +608,16 @@
     "params": {
       "name": "DeepSeek V3.2 (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "deepseek-ai/DeepSeek-V3.2",
       "description": "DeepSeek V3.2 \u2014 latest MoE, MIT license, frontier reasoning"
     }
@@ -374,7 +628,16 @@
     "params": {
       "name": "Qwen3.5 397B (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "Qwen/Qwen3.5-397B-A17B",
       "description": "Qwen3.5 \u2014 397B total / 17B active MoE, multilingual, Apache 2.0"
     }
@@ -385,7 +648,16 @@
     "params": {
       "name": "Kimi K2.5 (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "moonshotai/Kimi-K2.5",
       "description": "Kimi K2.5 \u2014 #2 open-weight model, reasoning, Moonshot AI"
     }
@@ -396,7 +668,16 @@
     "params": {
       "name": "DeepSeek R1 (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "deepseek-ai/DeepSeek-R1",
       "description": "DeepSeek R1 \u2014 chain-of-thought reasoning, competitive with o3"
     }
@@ -407,7 +688,16 @@
     "params": {
       "name": "Qwen3 Coder (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "Qwen/Qwen3-Coder-Next",
       "description": "Qwen3 Coder \u2014 optimized for agentic coding workflows"
     }
@@ -418,7 +708,16 @@
     "params": {
       "name": "BGE Large Embeddings (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "BAAI/bge-large-en-v1.5",
       "description": "State-of-the-art text embeddings for RAG and semantic search"
     }
@@ -429,7 +728,16 @@
     "params": {
       "name": "FLUX.1 Dev (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "black-forest-labs/FLUX.1-dev",
       "description": "FLUX.1 \u2014 state-of-the-art image generation from Black Forest Labs"
     }
@@ -440,7 +748,16 @@
     "params": {
       "name": "Whisper Large v3 Turbo (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "openai/whisper-large-v3-turbo",
       "description": "Whisper v3 Turbo \u2014 fast, accurate speech recognition"
     }
@@ -451,7 +768,16 @@
     "params": {
       "name": "NLLB Translation (HuggingFace)",
       "provider": "huggingface",
-      "auth": "HF_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "HF_TOKEN",
+        "signup_url": "https://huggingface.co/settings/tokens"
+      },
+      "protocol": "huggingface",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "rate-limited free tier"
+      },
       "model": "facebook/nllb-200-distilled-600M",
       "description": "No Language Left Behind \u2014 200+ language translation"
     }
@@ -462,8 +788,17 @@
     "params": {
       "name": "Tavily",
       "description": "AI-optimized web search \u2014 aggregates 20 sources, scores and ranks for relevance",
-      "free_tier": "1,000 credits/month",
-      "auth": "TAVILY_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "TAVILY_API_KEY",
+        "signup_url": "https://tavily.com"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "1,000 credits/month",
+        "paid_url": "https://tavily.com/pricing"
+      },
       "docs": "https://docs.tavily.com",
       "github": "https://github.com/tavily-ai/tavily-python"
     }
@@ -474,8 +809,17 @@
     "params": {
       "name": "Exa",
       "description": "Neural search engine with embeddings-powered next-link prediction",
-      "free_tier": "1,000 credits",
-      "auth": "EXA_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "EXA_API_KEY",
+        "signup_url": "https://exa.ai"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "1,000 credits",
+        "paid_url": "https://exa.ai/pricing"
+      },
       "docs": "https://docs.exa.ai",
       "github": "https://github.com/exa-labs/exa-py"
     }
@@ -486,8 +830,17 @@
     "params": {
       "name": "Serper",
       "description": "Google SERP API \u2014 search, images, news, maps, shopping, scholar",
-      "free_tier": "2,500 queries free, no card required",
-      "auth": "SERPER_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "SERPER_API_KEY",
+        "signup_url": "https://serper.dev"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "2,500 queries free, no card required",
+        "paid_url": "https://serper.dev/pricing"
+      },
       "docs": "https://serper.dev/docs"
     }
   },
@@ -497,8 +850,17 @@
     "params": {
       "name": "Brave Search API",
       "description": "Independent web search with AI snippets",
-      "free_tier": "2,000 queries/month",
-      "auth": "BRAVE_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "BRAVE_API_KEY",
+        "signup_url": "https://brave.com/search/api/"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "2,000 queries/month",
+        "paid_url": "https://brave.com/search/api/"
+      },
       "docs": "https://brave.com/search/api/"
     }
   },
@@ -508,8 +870,17 @@
     "params": {
       "name": "Firecrawl",
       "description": "Web scraping API \u2014 turns websites into LLM-ready data",
-      "free_tier": "500 credits/month, no card required",
-      "auth": "FIRECRAWL_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "FIRECRAWL_API_KEY",
+        "signup_url": "https://firecrawl.dev"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "500 credits/month, no card required",
+        "paid_url": "https://firecrawl.dev/pricing"
+      },
       "docs": "https://docs.firecrawl.dev",
       "github": "https://github.com/mendableai/firecrawl"
     }
@@ -520,8 +891,17 @@
     "params": {
       "name": "Apify",
       "description": "Web scraping platform with 1,600+ ready-made scrapers",
-      "free_tier": "$5/month free",
-      "auth": "APIFY_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "APIFY_TOKEN",
+        "signup_url": "https://apify.com"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$5/month free",
+        "paid_url": "https://apify.com/pricing"
+      },
       "docs": "https://docs.apify.com/api/v2"
     }
   },
@@ -531,8 +911,13 @@
     "params": {
       "name": "Puter.js (Free GPT)",
       "description": "Free GPT access \u2014 no API key required, runs from frontend",
-      "free_tier": "unlimited",
-      "auth": "none",
+      "auth": {
+        "method": "none"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "free"
+      },
       "docs": "https://developer.puter.com"
     }
   },
@@ -542,8 +927,17 @@
     "params": {
       "name": "OpenRouter",
       "description": "API aggregator \u2014 hundreds of free and paid LLMs through one endpoint",
-      "free_tier": "$5 free credits for new users",
-      "auth": "OPENROUTER_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "OPENROUTER_API_KEY",
+        "signup_url": "https://openrouter.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$5 free credits for new users",
+        "paid_url": "https://openrouter.ai/pricing"
+      },
       "docs": "https://openrouter.ai/docs"
     }
   },
@@ -553,8 +947,17 @@
     "params": {
       "name": "Resend",
       "description": "Developer-first email API",
-      "free_tier": "3,000 emails/month, 100/day",
-      "auth": "RESEND_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "RESEND_API_KEY",
+        "signup_url": "https://resend.com"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "3,000 emails/month, 100/day",
+        "paid_url": "https://resend.com/pricing"
+      },
       "docs": "https://resend.com/docs",
       "github": "https://github.com/resend/resend-python"
     }
@@ -565,8 +968,17 @@
     "params": {
       "name": "Neon Serverless Postgres",
       "description": "Serverless Postgres with branching \u2014 agents can spin up databases",
-      "free_tier": "0.5 GB storage, always free",
-      "auth": "NEON_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "NEON_API_KEY",
+        "signup_url": "https://neon.tech"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "0.5 GB storage, always free",
+        "paid_url": "https://neon.tech/pricing"
+      },
       "docs": "https://neon.tech/docs"
     }
   },
@@ -576,8 +988,17 @@
     "params": {
       "name": "Upstash Redis",
       "description": "Serverless Redis \u2014 agent memory, caching, rate limiting",
-      "free_tier": "10,000 commands/day",
-      "auth": "UPSTASH_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "UPSTASH_TOKEN",
+        "signup_url": "https://upstash.com"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "10,000 commands/day",
+        "paid_url": "https://upstash.com/pricing"
+      },
       "docs": "https://upstash.com/docs/redis"
     }
   },
@@ -587,8 +1008,17 @@
     "params": {
       "name": "Upstash Vector",
       "description": "Serverless vector database for RAG and semantic search",
-      "free_tier": "10,000 vectors, 1,000 queries/day",
-      "auth": "UPSTASH_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "UPSTASH_TOKEN",
+        "signup_url": "https://upstash.com"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "10,000 vectors, 1,000 queries/day",
+        "paid_url": "https://upstash.com/pricing"
+      },
       "docs": "https://upstash.com/docs/vector"
     }
   },
@@ -598,8 +1028,17 @@
     "params": {
       "name": "Unstructured.io",
       "description": "Parse PDFs, Word docs, HTML into structured data for LLMs",
-      "free_tier": "1,000 pages/month",
-      "auth": "UNSTRUCTURED_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "UNSTRUCTURED_API_KEY",
+        "signup_url": "https://unstructured.io"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "1,000 pages/month",
+        "paid_url": "https://unstructured.io/pricing"
+      },
       "docs": "https://docs.unstructured.io"
     }
   },
@@ -609,8 +1048,17 @@
     "params": {
       "name": "Together AI (FLUX)",
       "description": "FLUX and Stable Diffusion image generation",
-      "free_tier": "$5 free credits",
-      "auth": "TOGETHER_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "TOGETHER_API_KEY",
+        "signup_url": "https://together.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$5 free credits",
+        "paid_url": "https://together.ai/pricing"
+      },
       "docs": "https://docs.together.ai"
     }
   },
@@ -620,8 +1068,17 @@
     "params": {
       "name": "fal.ai",
       "description": "Fast image generation \u2014 FLUX, SDXL, ControlNet",
-      "free_tier": "$10 free credits",
-      "auth": "FAL_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "FAL_KEY",
+        "signup_url": "https://fal.ai"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$10 free credits",
+        "paid_url": "https://fal.ai/pricing"
+      },
       "docs": "https://fal.ai/docs"
     }
   },
@@ -631,8 +1088,17 @@
     "params": {
       "name": "E2B Code Sandbox",
       "description": "Cloud sandboxes for AI agents to execute code safely",
-      "free_tier": "100 sandbox hours/month",
-      "auth": "E2B_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "E2B_API_KEY",
+        "signup_url": "https://e2b.dev"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "100 sandbox hours/month",
+        "paid_url": "https://e2b.dev/pricing"
+      },
       "docs": "https://e2b.dev/docs",
       "github": "https://github.com/e2b-dev/e2b"
     }
@@ -643,8 +1109,17 @@
     "params": {
       "name": "Langfuse",
       "description": "Open-source LLM observability \u2014 traces, evals, prompt management",
-      "free_tier": "50K observations/month",
-      "auth": "LANGFUSE_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "LANGFUSE_API_KEY",
+        "signup_url": "https://langfuse.com"
+      },
+      "protocol": "rest",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "50K observations/month",
+        "paid_url": "https://langfuse.com/pricing"
+      },
       "docs": "https://langfuse.com/docs",
       "github": "https://github.com/langfuse/langfuse"
     }
@@ -655,10 +1130,17 @@
     "params": {
       "name": "Together AI",
       "description": "Fast inference for 100+ open models \u2014 Llama, Mistral, Qwen, and more",
-      "pricing": "$0.10-2.50/M tokens depending on model",
-      "free_tier": "$5 free credits",
-      "auth": "TOGETHER_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "TOGETHER_API_KEY",
+        "signup_url": "https://together.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$5 free credits",
+        "paid_url": "https://together.ai/pricing"
+      },
       "docs": "https://docs.together.ai",
       "models": [
         "THUDM/GLM-5",
@@ -674,10 +1156,17 @@
     "params": {
       "name": "Groq",
       "description": "Fastest inference \u2014 LPU hardware, sub-100ms latency",
-      "pricing": "$0.05-0.80/M tokens (Llama 70B: $0.59/M)",
-      "free_tier": "free tier available",
-      "auth": "GROQ_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "GROQ_API_KEY",
+        "signup_url": "https://console.groq.com"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 0.59,
+        "currency": "USD"
+      },
       "docs": "https://console.groq.com/docs",
       "models": [
         "glm-5",
@@ -692,10 +1181,17 @@
     "params": {
       "name": "Fireworks AI",
       "description": "Serverless inference with function calling and JSON mode",
-      "pricing": "$0.20-0.90/M tokens",
-      "free_tier": "$1 free credits",
-      "auth": "FIREWORKS_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "FIREWORKS_API_KEY",
+        "signup_url": "https://fireworks.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$1 free credits",
+        "paid_url": "https://fireworks.ai/pricing"
+      },
       "docs": "https://docs.fireworks.ai",
       "models": [
         "accounts/fireworks/models/glm-5",
@@ -709,10 +1205,17 @@
     "params": {
       "name": "DeepInfra",
       "description": "Low-cost inference \u2014 optimized for throughput",
-      "pricing": "$0.13-0.65/M tokens",
-      "free_tier": "free tier available",
-      "auth": "DEEPINFRA_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "DEEPINFRA_API_KEY",
+        "signup_url": "https://deepinfra.com"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 0.65,
+        "currency": "USD"
+      },
       "docs": "https://deepinfra.com/docs"
     }
   },
@@ -722,10 +1225,17 @@
     "params": {
       "name": "Cerebras",
       "description": "Wafer-scale engine \u2014 2000+ tokens/sec, fastest output speed",
-      "pricing": "$0.10-0.60/M tokens",
-      "free_tier": "free tier available",
-      "auth": "CEREBRAS_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "CEREBRAS_API_KEY",
+        "signup_url": "https://inference-docs.cerebras.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 0.6,
+        "currency": "USD"
+      },
       "docs": "https://inference-docs.cerebras.ai"
     }
   },
@@ -735,8 +1245,17 @@
     "params": {
       "name": "Vast.ai Serverless",
       "description": "GPU marketplace with serverless inference \u2014 A100s to consumer GPUs",
-      "pricing": "pay-per-second, varies by GPU ($0.40-2.00/hr)",
-      "auth": "VAST_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "VAST_API_KEY",
+        "signup_url": "https://vast.ai"
+      },
+      "protocol": "vast",
+      "pricing": {
+        "model": "per-hour",
+        "price_per_hour": 0.4,
+        "currency": "USD"
+      },
       "docs": "https://docs.vast.ai/serverless",
       "gpu_types": [
         "RTX 4090",
@@ -752,8 +1271,17 @@
     "params": {
       "name": "RunPod Serverless",
       "description": "Serverless GPU endpoints \u2014 autoscaling, pay-per-second",
-      "pricing": "pay-per-second ($0.59-1.20/hr depending on GPU)",
-      "auth": "RUNPOD_API_KEY",
+      "auth": {
+        "method": "api_key",
+        "key_name": "RUNPOD_API_KEY",
+        "signup_url": "https://runpod.io"
+      },
+      "protocol": "runpod",
+      "pricing": {
+        "model": "per-hour",
+        "price_per_hour": 0.59,
+        "currency": "USD"
+      },
       "docs": "https://docs.runpod.io/serverless",
       "gpu_types": [
         "A100",
@@ -768,10 +1296,17 @@
     "params": {
       "name": "Lepton AI",
       "description": "Optimized open-model inference with OpenAI-compatible API",
-      "pricing": "$0.40-0.80/M tokens",
-      "free_tier": "$10 free credits",
-      "auth": "LEPTON_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "LEPTON_API_KEY",
+        "signup_url": "https://www.lepton.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "$10 free credits",
+        "paid_url": "https://www.lepton.ai/pricing"
+      },
       "docs": "https://www.lepton.ai/docs"
     }
   },
@@ -781,9 +1316,17 @@
     "params": {
       "name": "Anyscale Endpoints",
       "description": "Fine-tuning + serving on Ray \u2014 production-grade open model hosting",
-      "pricing": "$0.15-0.50/M tokens",
-      "auth": "ANYSCALE_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "ANYSCALE_API_KEY",
+        "signup_url": "https://anyscale.com"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 0.5,
+        "currency": "USD"
+      },
       "docs": "https://docs.anyscale.com"
     }
   },
@@ -793,8 +1336,17 @@
     "params": {
       "name": "Replicate",
       "description": "Run any ML model via API \u2014 LLMs, image gen, audio, video",
-      "pricing": "varies by model and hardware",
-      "auth": "REPLICATE_API_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "REPLICATE_API_TOKEN",
+        "signup_url": "https://replicate.com"
+      },
+      "protocol": "replicate",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 0.65,
+        "currency": "USD"
+      },
       "docs": "https://replicate.com/docs"
     }
   },
@@ -804,8 +1356,17 @@
     "params": {
       "name": "Replicate (Image)",
       "description": "FLUX, SDXL, Stable Diffusion via API",
-      "pricing": "~$0.003-0.05 per image",
-      "auth": "REPLICATE_API_TOKEN",
+      "auth": {
+        "method": "api_key",
+        "key_name": "REPLICATE_API_TOKEN",
+        "signup_url": "https://replicate.com"
+      },
+      "protocol": "replicate",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 0.65,
+        "currency": "USD"
+      },
       "docs": "https://replicate.com/docs"
     }
   },
@@ -815,9 +1376,17 @@
     "params": {
       "name": "Perplexity API",
       "description": "Search-augmented LLM \u2014 answers with citations from the web",
-      "pricing": "$0.20-1.00/M tokens",
-      "auth": "PERPLEXITY_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "PERPLEXITY_API_KEY",
+        "signup_url": "https://perplexity.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "per-token",
+        "price_per_mtok": 1.0,
+        "currency": "USD"
+      },
       "docs": "https://docs.perplexity.ai"
     }
   },
@@ -827,10 +1396,17 @@
     "params": {
       "name": "Mistral AI",
       "description": "Official Mistral API \u2014 Mistral Large, Medium, Small, Codestral",
-      "pricing": "$0.15-2.00/M tokens",
-      "free_tier": "free tier for Mistral Small",
-      "auth": "MISTRAL_API_KEY",
-      "openai_compatible": true,
+      "auth": {
+        "method": "api_key",
+        "key_name": "MISTRAL_API_KEY",
+        "signup_url": "https://console.mistral.ai"
+      },
+      "protocol": "openai",
+      "pricing": {
+        "model": "freemium",
+        "free_tier": "free tier for Mistral Small",
+        "paid_url": "https://mistral.ai/pricing"
+      },
       "docs": "https://docs.mistral.ai"
     }
   }
