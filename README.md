@@ -125,9 +125,12 @@ Turn any machine with a GPU into a mesh inference provider:
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama4
 
-# Share your GPU (auto-detects hardware, starts ngrok tunnel, publishes to mesh)
+# Interactive setup (first time)
 pip install httpx
-python tools/gpu-provider/provider.py --gateway http://localhost:3000
+python tools/gpu-provider/provider.py
+
+# Make it permanent — survives reboot, auto-restarts on crash
+python tools/gpu-provider/provider.py --install
 ```
 
 Other agents discover your GPU instantly:
@@ -136,7 +139,7 @@ providers = client.discover("compute/inference/text-generation")
 # → "llama4:latest (NVIDIA GeForce RTX 3090)" — free, us-east
 ```
 
-See [GPU Provider docs](https://github.com/mellowmarshall/mars-protocol/tree/master/tools/gpu-provider) for pricing, regions, and networking options.
+See [GPU Provider docs](https://github.com/mellowmarshall/mars-protocol/tree/master/tools/gpu-provider) for pricing, regions, and service management.
 
 ---
 

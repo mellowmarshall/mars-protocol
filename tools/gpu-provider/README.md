@@ -1,12 +1,6 @@
 # MARS GPU Provider Agent
 
-Turn any machine with a GPU into a mesh inference provider in one command.
-
-## Prerequisites
-
-- [Ollama](https://ollama.com) installed and running
-- A mesh gateway running (or connect to the public network)
-- Python 3.9+ with `httpx`
+Turn any machine with a GPU into a mesh inference provider. One command to set up, one command to make it permanent.
 
 ## Quick Start
 
@@ -18,34 +12,53 @@ ollama pull llama4
 # Start a local gateway connected to the MARS network
 ./mesh-gateway --seed 5.161.53.251:4433 --listen 127.0.0.1:3000 &
 
-# Share your GPU with the mesh
+# Interactive setup (first time only)
 pip install httpx
-python provider.py --gateway http://localhost:3000 --region us-east
+python provider.py
+
+# Install as a permanent service — survives reboot, auto-restarts on crash
+python provider.py --install
 ```
 
-That's it. The provider agent:
+That's it. Your GPU is now on the MARS mesh permanently.
 
-1. **Detects your GPU** (NVIDIA via nvidia-smi, AMD via rocm-smi)
-2. **Lists installed Ollama models** (llama4, mistral, codellama, etc.)
-3. **Publishes each model** as a mesh descriptor with hardware specs
-4. **Re-publishes every 30 minutes** to keep listings alive
+## Running as a Service
+
+Descriptors on the mesh have a TTL (time-to-live). If you just run `provider.py` in a terminal and close it, your GPU will disappear from the mesh after the TTL expires.
+
+**`--install` solves this.** It creates a system service that:
+- Starts automatically on boot
+- Restarts automatically if it crashes
+- Uses 24-hour TTL with 6-hour refresh (survives 18 hours of downtime)
+- Runs without a terminal window
+- No sudo required
+
+```bash
+python provider.py --install    # Install and start the service
+python provider.py --status     # Check if it's running
+python provider.py --uninstall  # Stop and remove the service
+```
+
+**Linux:** Creates a systemd user service (`systemctl --user`)
+**macOS:** Creates a launchd agent (`~/Library/LaunchAgents/`)
+**Windows:** Prints instructions for Task Scheduler / WSL
 
 ## What Gets Published
 
-For each model on your GPU, a descriptor like this goes on the mesh:
+For each model on your GPU, a descriptor goes on the mesh:
 
 ```
 type:     compute/inference/text-generation
-endpoint: http://localhost:11434
+endpoint: https://abc123.ngrok.io
 params:
   name:              "llama4:latest (NVIDIA GeForce RTX 3090)"
   model:             "llama4:latest"
   gpu:               "NVIDIA GeForce RTX 3090"
   vram_mb:           24576
-  price_per_mtok: 0.00
+  price_per_mtok:    0.00
   region:            "us-east"
-  ollama_api:        "http://localhost:11434/api/generate"
-  openai_compat:     "http://localhost:11434/v1/chat/completions"
+  ollama_api:        "https://abc123.ngrok.io/api/generate"
+  openai_compat:     "https://abc123.ngrok.io/v1/chat/completions"
 ```
 
 Other agents discover it with:
@@ -53,44 +66,72 @@ Other agents discover it with:
 providers = client.discover("compute/inference/text-generation")
 ```
 
-## Options
+## Prerequisites
 
-```
---gateway URL     Mesh gateway URL (required)
---ollama URL      Ollama API URL (default: http://localhost:11434)
---endpoint URL    Public endpoint for this provider (default: Ollama URL)
---price FLOAT     Price per 1K tokens in USD (default: 0 = free)
---region NAME     Your region (e.g. us-east, eu-central)
---models LIST     Comma-separated models to advertise (default: all)
---refresh SECS    Re-publish interval (default: 1800)
-```
+- [Ollama](https://ollama.com) installed and running
+- Python 3.9+ with `httpx` (`pip install httpx`)
+- A mesh gateway running (or connect to the public network)
+- ngrok (optional, auto-detected — makes your GPU reachable from anywhere)
 
-## Making Your GPU Reachable
+## Setup Flow
 
-By default, Ollama only listens on localhost. For other agents to actually use your GPU:
+On first run, `provider.py` walks you through:
 
-**Option A: ngrok (easiest)**
+1. **GPU detection** — auto-detects NVIDIA/AMD hardware and VRAM
+2. **Model selection** — lists installed Ollama models, lets you pick which to share
+3. **Pricing** — suggests rates based on your GPU's throughput and electricity costs
+4. **Stripe setup** — opens browser for payment onboarding (optional, skip for free tier)
+5. **Region detection** — auto-detects your location via IP geolocation
+6. **Config saved** — writes `mars-provider.json`, never asks again
+
+## Networking
+
+By default, Ollama only listens on localhost. The provider agent auto-starts an ngrok tunnel if ngrok is installed:
+
 ```bash
+# Automatic (recommended) — ngrok detected and started automatically
+python provider.py
+
+# Manual ngrok
 ngrok http 11434
-# Use the ngrok URL as --endpoint
-python provider.py --gateway http://localhost:3000 --endpoint https://abc123.ngrok.io
-```
+python provider.py --endpoint https://abc123.ngrok.io
 
-**Option B: Tailscale (best for teams)**
-```bash
-# Ollama is reachable at your Tailscale IP
-python provider.py --gateway http://localhost:3000 --endpoint http://100.x.y.z:11434
-```
+# Tailscale (best for teams)
+python provider.py --endpoint http://100.x.y.z:11434
 
-**Option C: Port forward (if you own the router)**
-```bash
-# Forward port 11434 to this machine
-python provider.py --gateway http://localhost:3000 --endpoint http://your-public-ip:11434
+# Port forward
+python provider.py --endpoint http://your-public-ip:11434
 ```
 
 ## Pricing
 
-Set `--price 0` to share for free (good for building reputation).
-Set `--price 0.10` to charge $0.10 per 1K tokens.
+The setup suggests pricing based on your GPU's actual throughput:
+
+```
+Estimated throughput: ~25 tokens/sec
+Break-even price: $0.89/M tokens
+Suggested range:  $1.78 - $4.44/M tokens
+
+For comparison:
+  OpenAI GPT-4o:       $5.00/M tokens
+  Together AI:         $0.88/M tokens
+  Your break-even:     $0.89/M tokens
+```
+
+Set price to $0 to share for free (recommended for building reputation).
 
 Payment integration coming soon via purposebot.ai.
+
+## All Options
+
+```
+python provider.py              # Interactive setup + run
+python provider.py --install    # Install as permanent service
+python provider.py --uninstall  # Remove service
+python provider.py --status     # Check service status
+python provider.py --config FILE # Use saved config (headless)
+python provider.py --service    # Internal: headless mode for systemd/launchd
+python provider.py --ollama URL # Ollama API URL (default: http://localhost:11434)
+python provider.py --endpoint URL # Override public endpoint (skip ngrok)
+python provider.py --no-ngrok  # Don't auto-start ngrok
+```

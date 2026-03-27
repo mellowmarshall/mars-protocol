@@ -64,16 +64,43 @@ async def main():
 asyncio.run(main())
 ```
 
+## Keeping services alive
+
+Descriptors have a TTL (default 1 hour). Use `publish_maintained()` for long-running services — it re-publishes automatically in a background thread:
+
+```python
+from mesh_protocol import MeshClient
+
+with MeshClient("http://localhost:3000") as client:
+    with client.publish_maintained(
+        "compute/inference/text-generation",
+        endpoint="https://my-agent.example.com/v1/generate",
+    ) as desc:
+        print(f"Published: {desc.descriptor_id}")
+        # Descriptor stays alive as long as this block runs
+        while True:
+            time.sleep(60)
+```
+
+You can also set a custom TTL (up to 24 hours):
+
+```python
+client.publish("compute/analysis/research", endpoint="...", ttl=86400)
+```
+
 ## API
 
 | Method | Description |
 |--------|-------------|
-| `publish(type, endpoint, params=None)` | Publish a capability descriptor |
+| `publish(type, endpoint, params=None, ttl=None)` | Publish a capability descriptor |
+| `publish_maintained(type, endpoint, params=None, refresh_interval=1800)` | Publish and auto-refresh in background |
 | `discover(type)` | Discover descriptors matching a type prefix |
 | `health()` | Check gateway health |
 | `close()` | Close the HTTP connection |
 
 Both `MeshClient` and `AsyncMeshClient` support the context manager protocol (`with` / `async with`).
+
+`publish_maintained()` returns a `MaintainedDescriptor` (or `AsyncMaintainedDescriptor`) with `.stop()`, `.is_alive()`, and context manager support.
 
 Errors from the gateway are raised as `MeshError`, which includes the HTTP `status_code` and error `message`.
 

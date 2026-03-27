@@ -30,14 +30,23 @@ Connect your gateway to any MARS hub:
 ### Publish MCP server tools to the mesh
 
 ```bash
+# One-shot publish (tools expire after 1 hour)
 mesh-mcp-bridge publish \
   --gateway http://localhost:3000 \
   --mcp-server "python my_mcp_server.py" \
   --name "my-tools"
+
+# Keep tools alive permanently (re-publishes every 30 minutes)
+mesh-mcp-bridge publish \
+  --gateway http://localhost:3000 \
+  --mcp-server "python my_mcp_server.py" \
+  --name "my-tools" \
+  --refresh
 ```
 
 This connects to the MCP server, lists its tools, and registers each one as a
-mesh descriptor (type `mcp/tool/{tool_name}`).
+mesh descriptor (type `mcp/tool/{tool_name}`). Use `--refresh` to keep them alive
+indefinitely, or `--refresh-interval 900` to customize the re-publish interval.
 
 ### Discover mesh capabilities via MCP
 

@@ -164,7 +164,43 @@ with MeshClient("http://localhost:3000") as client:
         print(f"{p.type} -> {p.endpoint}")
 ```
 
-Async usage:
+### Keeping services alive
+
+Descriptors on the mesh have a **TTL (time-to-live)** — by default 1 hour. After the TTL expires, the descriptor disappears from the network. This is by design: if a provider goes offline, agents shouldn't be routed to a dead endpoint.
+
+For **long-running services**, use `publish_maintained()` which automatically refreshes in the background:
+
+```python
+from mesh_protocol import MeshClient
+
+with MeshClient("http://localhost:3000") as client:
+    # This stays alive as long as the process runs — background thread re-publishes
+    with client.publish_maintained(
+        "compute/inference/text-generation",
+        endpoint="https://my-agent.example.com/v1/generate",
+        params={"model": "glm-5"},
+    ) as desc:
+        print(f"Published: {desc.descriptor_id}")
+        # Your service runs here — descriptor is kept alive automatically
+        while True:
+            time.sleep(60)
+```
+
+For **GPU providers**, use `--install` to create a permanent system service:
+
+```bash
+python provider.py --install   # survives reboot, auto-restarts on crash
+```
+
+See the [GPU Provider docs](https://github.com/mellowmarshall/mars-protocol/tree/master/tools/gpu-provider) for details.
+
+You can also set a custom TTL (up to 24 hours) for more resilience:
+
+```python
+client.publish("compute/analysis/research", endpoint="...", ttl=86400)  # 24 hour TTL
+```
+
+### Async usage
 
 ```python
 import asyncio
