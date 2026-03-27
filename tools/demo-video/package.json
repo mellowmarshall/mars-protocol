@@ -1,0 +1,21 @@
+{
+  "name": "mars-demo-video",
+  "version": "1.0.0",
+  "description": "MARS protocol demo video — terminal-style animated demo",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts MarsDemo out/mars-demo.mp4",
+    "preview": "remotion preview src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.441",
+    "@remotion/player": "^4.0.441",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.441"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "typescript": "^6.0.2"
+  }
+}
